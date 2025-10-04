@@ -32,8 +32,13 @@ const Auth = () => {
     setIsLoading(true);
     
     const formData = new FormData(e.currentTarget);
-    const name = formData.get("name") as string;
+    const userType = formData.get("userType") as string;
+    const firstName = formData.get("firstName") as string;
+    const lastName = formData.get("lastName") as string;
     const email = formData.get("email") as string;
+    const phone = formData.get("phone") as string;
+    const documentType = formData.get("documentType") as string;
+    const documentNumber = formData.get("documentNumber") as string;
     const password = formData.get("password") as string;
     const confirmPassword = formData.get("confirmPassword") as string;
 
@@ -43,10 +48,16 @@ const Auth = () => {
       return;
     }
 
+    if (password.length < 8) {
+      toast.error("A senha deve ter no mínimo 8 caracteres");
+      setIsLoading(false);
+      return;
+    }
+
     // Simulação de registro - será substituído por autenticação real
     setTimeout(() => {
       setIsLoading(false);
-      toast.success("Conta criada com sucesso! Faça login para continuar.");
+      toast.success(`Conta ${userType === 'athlete' ? 'de atleta' : 'de patrocinador'} criada com sucesso! Faça login para continuar.`);
     }, 1500);
   };
 
@@ -133,23 +144,78 @@ const Auth = () => {
               <CardHeader>
                 <CardTitle>Criar nova conta</CardTitle>
                 <CardDescription>
-                  Preencha os dados abaixo para começar a investir
+                  Preencha os dados abaixo para começar
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <form onSubmit={handleSignup} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-name">Nome completo</Label>
-                    <Input
-                      id="signup-name"
-                      name="name"
-                      type="text"
-                      placeholder="Seu nome"
-                      required
-                      disabled={isLoading}
-                    />
+                  {/* User Type Selection */}
+                  <div className="space-y-3">
+                    <Label>Você é:</Label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <label className="cursor-pointer">
+                        <input
+                          type="radio"
+                          name="userType"
+                          value="athlete"
+                          defaultChecked
+                          className="peer sr-only"
+                        />
+                        <div className="border-2 border-border peer-checked:border-primary peer-checked:bg-primary/5 rounded-lg p-4 text-center transition-all hover:border-primary/50">
+                          <div className="text-4xl mb-2">🏆</div>
+                          <h3 className="font-semibold mb-1">Atleta</h3>
+                          <p className="text-xs text-muted-foreground">
+                            Quero receber patrocínio
+                          </p>
+                        </div>
+                      </label>
+
+                      <label className="cursor-pointer">
+                        <input
+                          type="radio"
+                          name="userType"
+                          value="sponsor"
+                          className="peer sr-only"
+                        />
+                        <div className="border-2 border-border peer-checked:border-primary peer-checked:bg-primary/5 rounded-lg p-4 text-center transition-all hover:border-primary/50">
+                          <div className="text-4xl mb-2">💰</div>
+                          <h3 className="font-semibold mb-1">Patrocinador</h3>
+                          <p className="text-xs text-muted-foreground">
+                            Quero investir em atletas
+                          </p>
+                        </div>
+                      </label>
+                    </div>
                   </div>
 
+                  {/* Name Fields */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="signup-firstname">Nome</Label>
+                      <Input
+                        id="signup-firstname"
+                        name="firstName"
+                        type="text"
+                        placeholder="Seu nome"
+                        required
+                        disabled={isLoading}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="signup-lastname">Sobrenome</Label>
+                      <Input
+                        id="signup-lastname"
+                        name="lastName"
+                        type="text"
+                        placeholder="Seu sobrenome"
+                        required
+                        disabled={isLoading}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Email */}
                   <div className="space-y-2">
                     <Label htmlFor="signup-email">Email</Label>
                     <Input
@@ -162,30 +228,78 @@ const Auth = () => {
                     />
                   </div>
 
+                  {/* Phone */}
                   <div className="space-y-2">
-                    <Label htmlFor="signup-password">Senha</Label>
+                    <Label htmlFor="signup-phone">Telefone/WhatsApp</Label>
                     <Input
-                      id="signup-password"
-                      name="password"
-                      type="password"
-                      placeholder="••••••••"
+                      id="signup-phone"
+                      name="phone"
+                      type="tel"
+                      placeholder="(00) 00000-0000"
                       required
                       disabled={isLoading}
-                      minLength={6}
                     />
                   </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="signup-confirm">Confirmar senha</Label>
-                    <Input
-                      id="signup-confirm"
-                      name="confirmPassword"
-                      type="password"
-                      placeholder="••••••••"
-                      required
-                      disabled={isLoading}
-                      minLength={6}
-                    />
+                  {/* Document Fields */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="signup-doctype">Tipo de Documento</Label>
+                      <select
+                        id="signup-doctype"
+                        name="documentType"
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        required
+                        disabled={isLoading}
+                      >
+                        <option value="">Selecione</option>
+                        <option value="cpf">CPF</option>
+                        <option value="rg">RG</option>
+                        <option value="cnpj">CNPJ</option>
+                        <option value="passport">Passaporte</option>
+                      </select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="signup-docnumber">Número do Documento</Label>
+                      <Input
+                        id="signup-docnumber"
+                        name="documentNumber"
+                        type="text"
+                        placeholder="000.000.000-00"
+                        required
+                        disabled={isLoading}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Password Fields */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="signup-password">Senha</Label>
+                      <Input
+                        id="signup-password"
+                        name="password"
+                        type="password"
+                        placeholder="Mínimo 8 caracteres"
+                        required
+                        disabled={isLoading}
+                        minLength={8}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="signup-confirm">Confirmar Senha</Label>
+                      <Input
+                        id="signup-confirm"
+                        name="confirmPassword"
+                        type="password"
+                        placeholder="Digite a senha novamente"
+                        required
+                        disabled={isLoading}
+                        minLength={8}
+                      />
+                    </div>
                   </div>
 
                   <Button
