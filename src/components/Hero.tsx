@@ -49,9 +49,11 @@ export const Hero = () => {
                 Explorar Marketplace
               </Button>
             </Link>
-            <Button variant="outline" size="lg" className="text-lg">
-              Como Funciona
-            </Button>
+            <Link to="/how-it-works">
+              <Button variant="outline" size="lg" className="text-lg">
+                Como Funciona
+              </Button>
+            </Link>
           </div>
 
           {/* Stats */}
