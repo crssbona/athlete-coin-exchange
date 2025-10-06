@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -7,9 +7,20 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TrendingUp } from "lucide-react";
 import { toast } from "sonner";
+import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/lib/supabase";
 
 const Auth = () => {
   const [isLoading, setIsLoading] = useState(false);
+  const navigate = useNavigate();
+  const { user, signIn, signUp } = useAuth();
+
+  // Redirect if already logged in
+  useEffect(() => {
+    if (user) {
+      navigate('/');
+    }
+  }, [user, navigate]);
 
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -19,12 +30,23 @@ const Auth = () => {
     const email = formData.get("email") as string;
     const password = formData.get("password") as string;
 
-    // Simulação de login - será substituído por autenticação real
-    setTimeout(() => {
-      setIsLoading(false);
-      toast.success("Login realizado com sucesso!");
-      // Aqui você redirecionaria para o dashboard
-    }, 1500);
+    const { error } = await signIn(email, password);
+    
+    setIsLoading(false);
+    
+    if (error) {
+      if (error.message.includes("Invalid login credentials")) {
+        toast.error("Email ou senha incorretos");
+      } else if (error.message.includes("Email not confirmed")) {
+        toast.error("Por favor, confirme seu email antes de fazer login");
+      } else {
+        toast.error("Erro ao fazer login. Tente novamente.");
+      }
+      return;
+    }
+
+    toast.success("Login realizado com sucesso!");
+    navigate('/');
   };
 
   const handleSignup = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -42,6 +64,7 @@ const Auth = () => {
     const password = formData.get("password") as string;
     const confirmPassword = formData.get("confirmPassword") as string;
 
+    // Client-side validation
     if (password !== confirmPassword) {
       toast.error("As senhas não coincidem");
       setIsLoading(false);
@@ -54,11 +77,55 @@ const Auth = () => {
       return;
     }
 
-    // Simulação de registro - será substituído por autenticação real
-    setTimeout(() => {
+    if (!email.includes('@')) {
+      toast.error("Email inválido");
       setIsLoading(false);
-      toast.success(`Conta ${userType === 'athlete' ? 'de atleta' : 'de patrocinador'} criada com sucesso! Faça login para continuar.`);
-    }, 1500);
+      return;
+    }
+
+    // Sign up with metadata
+    const { data, error } = await signUp(email, password, {
+      user_type: userType,
+      first_name: firstName,
+      last_name: lastName,
+      phone: phone,
+      document_type: documentType,
+      document_number: documentNumber
+    });
+
+    setIsLoading(false);
+
+    if (error) {
+      if (error.message.includes("already registered")) {
+        toast.error("Este email já está cadastrado. Faça login.");
+      } else if (error.message.includes("Password")) {
+        toast.error("Senha muito fraca. Use letras, números e caracteres especiais.");
+      } else {
+        toast.error("Erro ao criar conta. Tente novamente.");
+      }
+      return;
+    }
+
+    // Save profile data to profiles table
+    if (data.user) {
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .insert({
+          id: data.user.id,
+          user_type: userType,
+          first_name: firstName,
+          last_name: lastName,
+          phone: phone,
+          document_type: documentType,
+          document_number: documentNumber
+        });
+
+      if (profileError) {
+        console.error('Error creating profile:', profileError);
+      }
+    }
+
+    toast.success("Conta criada com sucesso! Verifique seu email para confirmar.");
   };
 
   return (
