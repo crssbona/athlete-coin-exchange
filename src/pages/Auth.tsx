@@ -196,9 +196,9 @@ const Auth = () => {
                   </Button>
 
                   <div className="text-center text-sm">
-                    <a href="#" className="text-muted-foreground hover:text-primary transition-colors">
+                    <Link to="/forgot-password" className="text-muted-foreground hover:text-primary transition-colors">
                       Esqueceu sua senha?
-                    </a>
+                    </Link>
                   </div>
                 </form>
               </CardContent>
