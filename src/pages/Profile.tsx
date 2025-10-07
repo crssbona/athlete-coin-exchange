@@ -53,11 +53,37 @@ export default function Profile() {
         .from('profiles')
         .select('*')
         .eq('id', user?.id)
-        .single();
+        .maybeSingle();
 
       if (error) throw error;
-      setProfile(data);
-      setActiveRole(data.active_role || 'sponsor');
+      
+      // Se não existe perfil, cria um básico
+      if (!data) {
+        const newProfile = {
+          id: user?.id,
+          name: user?.user_metadata?.first_name 
+            ? `${user.user_metadata.first_name} ${user.user_metadata.last_name || ''}`.trim()
+            : user?.email?.split('@')[0] || 'Usuário',
+          email: user?.email || '',
+          phone: user?.user_metadata?.phone,
+          document: user?.user_metadata?.document_number,
+          active_role: 'sponsor' as const
+        };
+        
+        const { error: insertError } = await supabase
+          .from('profiles')
+          .insert(newProfile);
+          
+        if (insertError) {
+          console.error('Error creating profile:', insertError);
+        }
+        
+        setProfile(newProfile);
+        setActiveRole('sponsor');
+      } else {
+        setProfile(data);
+        setActiveRole(data.active_role || 'sponsor');
+      }
     } catch (error) {
       console.error('Error loading profile:', error);
       toast.error('Erro ao carregar perfil');

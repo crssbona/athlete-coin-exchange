@@ -112,12 +112,10 @@ const Auth = () => {
         .from('profiles')
         .insert({
           id: data.user.id,
-          user_type: userType,
-          first_name: firstName,
-          last_name: lastName,
+          name: `${firstName} ${lastName}`.trim(),
           phone: phone,
-          document_type: documentType,
-          document_number: documentNumber
+          document: documentNumber,
+          active_role: 'sponsor'
         });
 
       if (profileError) {
