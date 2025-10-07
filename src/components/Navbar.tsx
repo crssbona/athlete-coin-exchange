@@ -76,11 +76,11 @@ export const Navbar = () => {
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate('/profile')}>
                   <LayoutDashboard className="w-4 h-4 mr-2" />
                   Dashboard
                 </DropdownMenuItem>
-                <DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate('/profile')}>
                   <UserCircle className="w-4 h-4 mr-2" />
                   Meu Perfil
                 </DropdownMenuItem>
