@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "react-router-dom";
-import { TrendingUp, User, Wallet, Settings, LogOut, LayoutDashboard, UserCircle } from "lucide-react";
+import { TrendingUp, User, Wallet, Settings, LogOut, Eye, UserCircle } from "lucide-react";
 import { Button } from "./ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import {
@@ -76,9 +76,9 @@ export const Navbar = () => {
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => navigate('/profile')}>
-                  <LayoutDashboard className="w-4 h-4 mr-2" />
-                  Dashboard
+                <DropdownMenuItem onClick={() => navigate('/watchlist')}>
+                  <Eye className="w-4 h-4 mr-2" />
+                  Watchlist
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => navigate('/profile')}>
                   <UserCircle className="w-4 h-4 mr-2" />

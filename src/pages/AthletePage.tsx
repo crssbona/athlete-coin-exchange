@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { Navbar } from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,71 @@ const AthletePage = () => {
   const athlete = mockAthletes.find((a) => a.id === id);
   const [tokenAmount, setTokenAmount] = useState(1);
   const [buying, setBuying] = useState(false);
+  const [isInWatchlist, setIsInWatchlist] = useState(false);
+  const [watchlistLoading, setWatchlistLoading] = useState(false);
+
+  useEffect(() => {
+    if (user && athlete) {
+      checkWatchlist();
+    }
+  }, [user, athlete]);
+
+  const checkWatchlist = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('user_watchlist')
+        .select('id')
+        .eq('user_id', user?.id)
+        .eq('athlete_id', athlete?.id)
+        .maybeSingle();
+
+      if (error) throw error;
+      setIsInWatchlist(!!data);
+    } catch (error) {
+      console.error('Error checking watchlist:', error);
+    }
+  };
+
+  const toggleWatchlist = async () => {
+    if (!user) {
+      toast.error("Você precisa fazer login");
+      navigate("/auth");
+      return;
+    }
+
+    setWatchlistLoading(true);
+    try {
+      if (isInWatchlist) {
+        // Remove from watchlist
+        const { error } = await supabase
+          .from('user_watchlist')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('athlete_id', athlete?.id);
+
+        if (error) throw error;
+        setIsInWatchlist(false);
+        toast.success('Removido da watchlist');
+      } else {
+        // Add to watchlist
+        const { error } = await supabase
+          .from('user_watchlist')
+          .insert({
+            user_id: user.id,
+            athlete_id: athlete?.id
+          });
+
+        if (error) throw error;
+        setIsInWatchlist(true);
+        toast.success('Adicionado à watchlist');
+      }
+    } catch (error) {
+      console.error('Error toggling watchlist:', error);
+      toast.error('Erro ao atualizar watchlist');
+    } finally {
+      setWatchlistLoading(false);
+    }
+  };
 
   if (!athlete) {
     return (
@@ -220,8 +285,14 @@ const AthletePage = () => {
                     >
                       {buying ? 'Processando...' : 'Comprar Tokens'}
                     </Button>
-                    <Button variant="outline" size="lg" className="w-full">
-                      Adicionar à Watchlist
+                    <Button 
+                      variant="outline" 
+                      size="lg" 
+                      className="w-full"
+                      onClick={toggleWatchlist}
+                      disabled={watchlistLoading}
+                    >
+                      {isInWatchlist ? 'Remover da Watchlist' : 'Adicionar à Watchlist'}
                     </Button>
                   </div>
                 </CardContent>

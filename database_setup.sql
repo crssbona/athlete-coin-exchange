@@ -107,3 +107,18 @@ alter table public.athlete_videos enable row level security;
 
 create policy "Anyone can view athlete videos" on public.athlete_videos for select to authenticated using (true);
 create policy "Athletes can manage their own videos" on public.athlete_videos for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- User watchlist table
+create table public.user_watchlist (
+    id uuid primary key default gen_random_uuid(),
+    user_id uuid references auth.users(id) on delete cascade not null,
+    athlete_id text not null,
+    added_at timestamp with time zone default timezone('utc'::text, now()) not null,
+    unique (user_id, athlete_id)
+);
+
+alter table public.user_watchlist enable row level security;
+
+create policy "Users can view their own watchlist" on public.user_watchlist for select using (auth.uid() = user_id);
+create policy "Users can insert their own watchlist" on public.user_watchlist for insert with check (auth.uid() = user_id);
+create policy "Users can delete their own watchlist" on public.user_watchlist for delete using (auth.uid() = user_id);
