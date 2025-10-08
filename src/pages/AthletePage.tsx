@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { Navbar } from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,11 +8,16 @@ import { Input } from "@/components/ui/input";
 import { mockAthletes } from "@/data/mockAthletes";
 import { TrendingUp, TrendingDown, Trophy, ArrowLeft, Twitter, Instagram } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/hooks/useAuth";
 
 const AthletePage = () => {
   const { id } = useParams();
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const athlete = mockAthletes.find((a) => a.id === id);
   const [tokenAmount, setTokenAmount] = useState(1);
+  const [buying, setBuying] = useState(false);
 
   if (!athlete) {
     return (
@@ -30,8 +35,40 @@ const AthletePage = () => {
   const isPositive = athlete.priceChange >= 0;
   const totalPrice = athlete.tokenPrice * tokenAmount;
 
-  const handleBuy = () => {
-    toast.success(`Compra realizada! ${tokenAmount} tokens de ${athlete.name} por $${totalPrice.toFixed(2)}`);
+  const handleBuy = async () => {
+    if (!user) {
+      toast.error("Você precisa fazer login para comprar tokens");
+      navigate("/auth");
+      return;
+    }
+
+    if (tokenAmount <= 0 || tokenAmount > athlete.availableTokens) {
+      toast.error("Quantidade de tokens inválida");
+      return;
+    }
+
+    setBuying(true);
+    try {
+      // Insere a compra na tabela user_tokens
+      const { error: insertError } = await supabase
+        .from('user_tokens')
+        .insert({
+          user_id: user.id,
+          athlete_id: athlete.id,
+          quantity: tokenAmount,
+          purchase_price: athlete.tokenPrice
+        });
+
+      if (insertError) throw insertError;
+
+      toast.success(`Compra realizada! ${tokenAmount} tokens de ${athlete.name} por R$ ${totalPrice.toFixed(2)}`);
+      setTokenAmount(1);
+    } catch (error) {
+      console.error('Error buying tokens:', error);
+      toast.error('Erro ao comprar tokens. Tente novamente.');
+    } finally {
+      setBuying(false);
+    }
   };
 
   return (
@@ -179,8 +216,9 @@ const AthletePage = () => {
                       size="lg" 
                       className="w-full"
                       onClick={handleBuy}
+                      disabled={buying}
                     >
-                      Comprar Tokens
+                      {buying ? 'Processando...' : 'Comprar Tokens'}
                     </Button>
                     <Button variant="outline" size="lg" className="w-full">
                       Adicionar à Watchlist

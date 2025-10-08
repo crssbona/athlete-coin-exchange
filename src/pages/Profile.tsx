@@ -20,7 +20,6 @@ type UserRole = 'sponsor' | 'sponsored';
 interface UserProfile {
   id: string;
   name: string;
-  email: string;
   document?: string;
   phone?: string;
   active_role: UserRole;
@@ -64,7 +63,6 @@ export default function Profile() {
           name: user?.user_metadata?.first_name 
             ? `${user.user_metadata.first_name} ${user.user_metadata.last_name || ''}`.trim()
             : user?.email?.split('@')[0] || 'Usuário',
-          email: user?.email || '',
           phone: user?.user_metadata?.phone,
           document: user?.user_metadata?.document_number,
           active_role: 'sponsor' as const
