@@ -54,7 +54,6 @@ const Auth = () => {
     setIsLoading(true);
     
     const formData = new FormData(e.currentTarget);
-    const userType = formData.get("userType") as string;
     const firstName = formData.get("firstName") as string;
     const lastName = formData.get("lastName") as string;
     const email = formData.get("email") as string;
@@ -85,7 +84,6 @@ const Auth = () => {
 
     // Sign up with metadata
     const { data, error } = await signUp(email, password, {
-      user_type: userType,
       first_name: firstName,
       last_name: lastName,
       phone: phone,
@@ -214,45 +212,6 @@ const Auth = () => {
               </CardHeader>
               <CardContent>
                 <form onSubmit={handleSignup} className="space-y-4">
-                  {/* User Type Selection */}
-                  <div className="space-y-3">
-                    <Label>Você é:</Label>
-                    <div className="grid grid-cols-2 gap-3">
-                      <label className="cursor-pointer">
-                        <input
-                          type="radio"
-                          name="userType"
-                          value="athlete"
-                          defaultChecked
-                          className="peer sr-only"
-                        />
-                        <div className="border-2 border-border peer-checked:border-primary peer-checked:bg-primary/5 rounded-lg p-4 text-center transition-all hover:border-primary/50">
-                          <div className="text-4xl mb-2">🏆</div>
-                          <h3 className="font-semibold mb-1">Atleta</h3>
-                          <p className="text-xs text-muted-foreground">
-                            Quero receber patrocínio
-                          </p>
-                        </div>
-                      </label>
-
-                      <label className="cursor-pointer">
-                        <input
-                          type="radio"
-                          name="userType"
-                          value="sponsor"
-                          className="peer sr-only"
-                        />
-                        <div className="border-2 border-border peer-checked:border-primary peer-checked:bg-primary/5 rounded-lg p-4 text-center transition-all hover:border-primary/50">
-                          <div className="text-4xl mb-2">💰</div>
-                          <h3 className="font-semibold mb-1">Patrocinador</h3>
-                          <p className="text-xs text-muted-foreground">
-                            Quero investir em atletas
-                          </p>
-                        </div>
-                      </label>
-                    </div>
-                  </div>
-
                   {/* Name Fields */}
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
@@ -319,9 +278,7 @@ const Auth = () => {
                       >
                         <option value="">Selecione</option>
                         <option value="cpf">CPF</option>
-                        <option value="rg">RG</option>
                         <option value="cnpj">CNPJ</option>
-                        <option value="passport">Passaporte</option>
                       </select>
                     </div>
 
