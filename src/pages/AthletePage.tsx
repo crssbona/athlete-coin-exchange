@@ -15,17 +15,69 @@ const AthletePage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const athlete = mockAthletes.find((a) => a.id === id);
+  const [athlete, setAthlete] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
   const [tokenAmount, setTokenAmount] = useState(1);
   const [buying, setBuying] = useState(false);
   const [isInWatchlist, setIsInWatchlist] = useState(false);
   const [watchlistLoading, setWatchlistLoading] = useState(false);
 
   useEffect(() => {
+    loadAthlete();
+  }, [id]);
+
+  useEffect(() => {
     if (user && athlete) {
       checkWatchlist();
     }
   }, [user, athlete]);
+
+  const loadAthlete = async () => {
+    try {
+      // Try to load from Supabase first
+      const { data, error } = await supabase
+        .from('athlete_tokens')
+        .select('*')
+        .eq('athlete_id', id)
+        .maybeSingle();
+
+      if (data && data.athlete_name) {
+        // Convert to Athlete type
+        setAthlete({
+          id: data.athlete_id,
+          name: data.athlete_name,
+          sport: data.sport,
+          avatar: data.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${data.athlete_name}`,
+          tokenPrice: data.price_per_token,
+          priceChange: data.price_change_24h || 0,
+          totalTokens: data.total_tokens,
+          availableTokens: data.available_tokens,
+          marketCap: data.market_cap || (data.total_tokens * data.price_per_token),
+          volume24h: data.volume_24h || 0,
+          description: data.description || '',
+          achievements: data.achievements || [],
+          socialMedia: {
+            twitter: data.social_twitter,
+            instagram: data.social_instagram,
+            twitch: data.social_twitch,
+            youtube: data.social_youtube,
+          },
+          dbId: data.id // Store database ID for updates
+        });
+      } else {
+        // Fallback to mock data
+        const mockAthlete = mockAthletes.find((a) => a.id === id);
+        setAthlete(mockAthlete);
+      }
+    } catch (error) {
+      console.error('Error loading athlete:', error);
+      // Fallback to mock data
+      const mockAthlete = mockAthletes.find((a) => a.id === id);
+      setAthlete(mockAthlete);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const checkWatchlist = async () => {
     try {
@@ -84,6 +136,17 @@ const AthletePage = () => {
     }
   };
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Navbar />
+        <div className="flex items-center justify-center min-h-[60vh]">
+          <p className="text-xl text-muted-foreground">Carregando...</p>
+        </div>
+      </div>
+    );
+  }
+
   if (!athlete) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -114,7 +177,19 @@ const AthletePage = () => {
 
     setBuying(true);
     try {
-      // Insere a compra na tabela user_tokens
+      // Update athlete_tokens if this is a database athlete
+      if (athlete.dbId) {
+        const { error: updateError } = await supabase
+          .from('athlete_tokens')
+          .update({
+            available_tokens: athlete.availableTokens - tokenAmount
+          })
+          .eq('id', athlete.dbId);
+
+        if (updateError) throw updateError;
+      }
+
+      // Insert purchase record
       const { error: insertError } = await supabase
         .from('user_tokens')
         .insert({
@@ -128,6 +203,9 @@ const AthletePage = () => {
 
       toast.success(`Compra realizada! ${tokenAmount} tokens de ${athlete.name} por R$ ${totalPrice.toFixed(2)}`);
       setTokenAmount(1);
+      
+      // Reload athlete data to show updated available tokens
+      loadAthlete();
     } catch (error) {
       console.error('Error buying tokens:', error);
       toast.error('Erro ao comprar tokens. Tente novamente.');

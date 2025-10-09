@@ -4,6 +4,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Coins, Plus, DollarSign } from "lucide-react";
 import { toast } from "sonner";
@@ -14,6 +16,15 @@ interface AthleteToken {
   total_tokens: number;
   available_tokens: number;
   price_per_token: number;
+  athlete_name?: string;
+  sport?: string;
+  description?: string;
+  avatar_url?: string;
+  achievements?: string[];
+  social_twitter?: string;
+  social_instagram?: string;
+  social_twitch?: string;
+  social_youtube?: string;
 }
 
 interface SponsoredPanelProps {
@@ -26,6 +37,17 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
   const [loading, setLoading] = useState(true);
   const [newTokens, setNewTokens] = useState(10000);
   const [newPrice, setNewPrice] = useState(10);
+  
+  // Profile fields
+  const [athleteName, setAthleteName] = useState("");
+  const [sport, setSport] = useState("");
+  const [description, setDescription] = useState("");
+  const [avatarUrl, setAvatarUrl] = useState("");
+  const [achievements, setAchievements] = useState("");
+  const [twitter, setTwitter] = useState("");
+  const [instagram, setInstagram] = useState("");
+  const [twitch, setTwitch] = useState("");
+  const [youtube, setYoutube] = useState("");
 
   useEffect(() => {
     loadAthleteTokens();
@@ -50,12 +72,14 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
 
   const createTokens = async () => {
     try {
-      if (!profile?.name) {
-        toast.error('Complete seu perfil antes de criar tokens');
+      if (!athleteName || !sport || !description) {
+        toast.error('Preencha todos os campos obrigatórios');
         return;
       }
 
       const athleteId = `athlete-${userId.substring(0, 8)}`;
+      const achievementsArray = achievements.split('\n').filter(a => a.trim());
+      const marketCap = newTokens * newPrice;
       
       const { error } = await supabase
         .from('athlete_tokens')
@@ -64,12 +88,24 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
           user_id: userId,
           total_tokens: newTokens,
           available_tokens: newTokens,
-          price_per_token: newPrice
+          price_per_token: newPrice,
+          athlete_name: athleteName,
+          sport: sport,
+          description: description,
+          avatar_url: avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${athleteName}`,
+          achievements: achievementsArray,
+          social_twitter: twitter || null,
+          social_instagram: instagram || null,
+          social_twitch: twitch || null,
+          social_youtube: youtube || null,
+          market_cap: marketCap,
+          volume_24h: 0,
+          price_change_24h: 0
         });
 
       if (error) throw error;
       
-      toast.success('Tokens criados com sucesso!');
+      toast.success('Tokens criados com sucesso! Você já aparece no marketplace!');
       loadAthleteTokens();
     } catch (error: any) {
       console.error('Error creating tokens:', error);
@@ -126,37 +162,134 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Seus Tokens</CardTitle>
+          <CardTitle>Criar Seu Perfil de Atleta</CardTitle>
           <CardDescription>
-            Você ainda não criou seus tokens. Crie agora para começar a ser patrocinado!
+            Preencha seus dados para aparecer no marketplace e começar a ser patrocinado!
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <Label htmlFor="athleteName">Nome do Atleta *</Label>
+              <Input
+                id="athleteName"
+                value={athleteName}
+                onChange={(e) => setAthleteName(e.target.value)}
+                placeholder="Seu nome artístico"
+              />
+            </div>
+            <div>
+              <Label htmlFor="sport">Modalidade *</Label>
+              <Select value={sport} onValueChange={setSport}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="E-Sports">E-Sports</SelectItem>
+                  <SelectItem value="Futebol">Futebol</SelectItem>
+                  <SelectItem value="MMA">MMA</SelectItem>
+                  <SelectItem value="Atletismo">Atletismo</SelectItem>
+                  <SelectItem value="Basquete">Basquete</SelectItem>
+                  <SelectItem value="Vôlei">Vôlei</SelectItem>
+                  <SelectItem value="Natação">Natação</SelectItem>
+                  <SelectItem value="Outros">Outros</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
           <div>
-            <Label htmlFor="tokens">Quantidade de Tokens</Label>
-            <Input
-              id="tokens"
-              type="number"
-              value={newTokens}
-              onChange={(e) => setNewTokens(Number(e.target.value))}
-              min="1000"
-              step="1000"
+            <Label htmlFor="description">Descrição *</Label>
+            <Textarea
+              id="description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Conte sua história, suas especialidades..."
+              rows={3}
             />
           </div>
+
           <div>
-            <Label htmlFor="price">Preço por Token (R$)</Label>
+            <Label htmlFor="avatarUrl">URL da Foto (opcional)</Label>
             <Input
-              id="price"
-              type="number"
-              value={newPrice}
-              onChange={(e) => setNewPrice(Number(e.target.value))}
-              min="0.01"
-              step="0.01"
+              id="avatarUrl"
+              value={avatarUrl}
+              onChange={(e) => setAvatarUrl(e.target.value)}
+              placeholder="https://..."
+            />
+            <p className="text-xs text-muted-foreground mt-1">
+              Se deixar em branco, um avatar será gerado automaticamente
+            </p>
+          </div>
+
+          <div>
+            <Label htmlFor="achievements">Conquistas (uma por linha)</Label>
+            <Textarea
+              id="achievements"
+              value={achievements}
+              onChange={(e) => setAchievements(e.target.value)}
+              placeholder="Campeão Regional 2023&#10;Top 10 Nacional&#10;500+ horas de jogo"
+              rows={3}
             />
           </div>
-          <Button onClick={createTokens} className="w-full">
+
+          <div className="border-t pt-4">
+            <h3 className="font-semibold mb-3">Redes Sociais (opcional)</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <Input
+                placeholder="Twitter/X"
+                value={twitter}
+                onChange={(e) => setTwitter(e.target.value)}
+              />
+              <Input
+                placeholder="Instagram"
+                value={instagram}
+                onChange={(e) => setInstagram(e.target.value)}
+              />
+              <Input
+                placeholder="Twitch"
+                value={twitch}
+                onChange={(e) => setTwitch(e.target.value)}
+              />
+              <Input
+                placeholder="YouTube"
+                value={youtube}
+                onChange={(e) => setYoutube(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="border-t pt-4">
+            <h3 className="font-semibold mb-3">Configuração de Tokens</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="tokens">Quantidade de Tokens *</Label>
+                <Input
+                  id="tokens"
+                  type="number"
+                  value={newTokens}
+                  onChange={(e) => setNewTokens(Number(e.target.value))}
+                  min="1000"
+                  step="1000"
+                />
+              </div>
+              <div>
+                <Label htmlFor="price">Preço por Token (R$) *</Label>
+                <Input
+                  id="price"
+                  type="number"
+                  value={newPrice}
+                  onChange={(e) => setNewPrice(Number(e.target.value))}
+                  min="0.01"
+                  step="0.01"
+                />
+              </div>
+            </div>
+          </div>
+
+          <Button onClick={createTokens} className="w-full" size="lg">
             <Plus className="w-4 h-4 mr-2" />
-            Criar Tokens
+            Criar Perfil e Tokens
           </Button>
         </CardContent>
       </Card>
