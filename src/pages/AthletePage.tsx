@@ -177,12 +177,15 @@ const AthletePage = () => {
 
     setBuying(true);
     try {
+      // Calculate new available tokens
+      const newAvailableTokens = athlete.availableTokens - tokenAmount;
+
       // Update athlete_tokens if this is a database athlete
       if (athlete.dbId) {
         const { error: updateError } = await supabase
           .from('athlete_tokens')
           .update({
-            available_tokens: athlete.availableTokens - tokenAmount
+            available_tokens: newAvailableTokens
           })
           .eq('id', athlete.dbId);
 
@@ -202,10 +205,16 @@ const AthletePage = () => {
       if (insertError) throw insertError;
 
       toast.success(`Compra realizada! ${tokenAmount} tokens de ${athlete.name} por R$ ${totalPrice.toFixed(2)}`);
+      
+      // Update local state immediately
+      setAthlete({
+        ...athlete,
+        availableTokens: newAvailableTokens
+      });
       setTokenAmount(1);
       
-      // Reload athlete data to show updated available tokens
-      loadAthlete();
+      // Reload athlete data to ensure sync
+      await loadAthlete();
     } catch (error) {
       console.error('Error buying tokens:', error);
       toast.error('Erro ao comprar tokens. Tente novamente.');

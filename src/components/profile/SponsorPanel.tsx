@@ -42,8 +42,48 @@ export function SponsorPanel({ userId }: SponsorPanelProps) {
     }
   };
 
+  const [athletesData, setAthletesData] = useState<Map<string, any>>(new Map());
+
+  useEffect(() => {
+    loadAthletesData();
+  }, [tokens]);
+
+  const loadAthletesData = async () => {
+    const athleteIds = tokens.map(t => t.athlete_id);
+    const dataMap = new Map();
+
+    // Load from Supabase
+    const { data } = await supabase
+      .from('athlete_tokens')
+      .select('*')
+      .in('athlete_id', athleteIds);
+
+    if (data) {
+      data.forEach(athlete => {
+        dataMap.set(athlete.athlete_id, {
+          name: athlete.athlete_name,
+          avatar: athlete.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${athlete.athlete_name}`,
+          tokenPrice: athlete.price_per_token,
+          sport: athlete.sport
+        });
+      });
+    }
+
+    // Fallback to mock data for any missing athletes
+    athleteIds.forEach(id => {
+      if (!dataMap.has(id)) {
+        const mock = mockAthletes.find(a => a.id === id);
+        if (mock) {
+          dataMap.set(id, mock);
+        }
+      }
+    });
+
+    setAthletesData(dataMap);
+  };
+
   const getAthleteInfo = (athleteId: string) => {
-    return mockAthletes.find(a => a.id === athleteId);
+    return athletesData.get(athleteId);
   };
 
   const calculatePriceChange = (purchasePrice: number, currentPrice: number) => {
