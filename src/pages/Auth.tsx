@@ -94,8 +94,8 @@ const Auth = () => {
     setIsLoading(false);
 
     if (error) {
-      if (error.message.includes("already registered")) {
-        toast.error("Este email já está cadastrado. Faça login.");
+      if (error.message.includes("already registered") || error.message.includes("already been registered")) {
+        toast.error("Este email já está vinculado à uma conta");
       } else if (error.message.includes("Password")) {
         toast.error("Senha muito fraca. Use letras, números e caracteres especiais.");
       } else {
