@@ -182,47 +182,22 @@ const AthletePage = () => {
 
     setBuying(true);
     try {
-      // First, get the current available tokens from database (atomic read)
-      const { data: currentData, error: fetchError } = await supabase
-        .from('athlete_tokens')
-        .select('available_tokens')
-        .eq('id', athlete.dbId)
-        .single();
+      // Use RPC function for atomic purchase (bypasses RLS safely)
+      const { error: rpcError } = await supabase.rpc('purchase_tokens', {
+        p_athlete_token_id: athlete.dbId,
+        p_athlete_id: athlete.id,
+        p_quantity: tokenAmount,
+        p_price: athlete.tokenPrice
+      });
 
-      if (fetchError) throw fetchError;
-
-      // Verify if there are enough tokens available
-      if (!currentData || currentData.available_tokens < tokenAmount) {
-        toast.error(`Apenas ${currentData?.available_tokens || 0} tokens disponíveis`);
-        await loadAthlete(); // Refresh to show correct amount
-        return;
+      if (rpcError) {
+        if (rpcError.message.includes('Not enough tokens')) {
+          toast.error('Tokens insuficientes disponíveis');
+          await loadAthlete();
+          return;
+        }
+        throw rpcError;
       }
-
-      // Calculate new available tokens
-      const newAvailableTokens = currentData.available_tokens - tokenAmount;
-
-      // Update athlete_tokens atomically
-      const { error: updateError } = await supabase
-        .from('athlete_tokens')
-        .update({
-          available_tokens: newAvailableTokens
-        })
-        .eq('id', athlete.dbId)
-        .eq('available_tokens', currentData.available_tokens); // Only update if value hasn't changed
-
-      if (updateError) throw updateError;
-
-      // Insert purchase record
-      const { error: insertError } = await supabase
-        .from('user_tokens')
-        .insert({
-          user_id: user.id,
-          athlete_id: athlete.id,
-          quantity: tokenAmount,
-          purchase_price: athlete.tokenPrice
-        });
-
-      if (insertError) throw insertError;
 
       toast.success(`Compra realizada! ${tokenAmount} tokens de ${athlete.name} por R$ ${totalPrice.toFixed(2)}`);
       
