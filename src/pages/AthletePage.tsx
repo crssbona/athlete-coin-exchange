@@ -18,6 +18,7 @@ const AthletePage = () => {
   const [athlete, setAthlete] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [tokenAmount, setTokenAmount] = useState(1);
+  const [limitPrice, setLimitPrice] = useState<string>("");
   const [buying, setBuying] = useState(false);
   const [isInWatchlist, setIsInWatchlist] = useState(false);
   const [watchlistLoading, setWatchlistLoading] = useState(false);
@@ -31,6 +32,12 @@ const AthletePage = () => {
       checkWatchlist();
     }
   }, [user, athlete]);
+
+  useEffect(() => {
+    if (athlete?.tokenPrice != null) {
+      setLimitPrice(athlete.tokenPrice.toFixed(2));
+    }
+  }, [athlete?.tokenPrice]);
 
   const loadAthlete = async () => {
     try {
@@ -161,7 +168,9 @@ const AthletePage = () => {
   }
 
   const isPositive = athlete.priceChange >= 0;
+  const limitPriceNum = parseFloat(limitPrice) || athlete.tokenPrice;
   const totalPrice = athlete.tokenPrice * tokenAmount;
+  const totalAtLimit = limitPriceNum * tokenAmount;
 
   const handleBuy = async () => {
     if (!user) {
@@ -175,6 +184,11 @@ const AthletePage = () => {
       return;
     }
 
+    if (limitPriceNum <= 0) {
+      toast.error("Preço desejado inválido");
+      return;
+    }
+
     if (!athlete.dbId) {
       toast.error("Este atleta não está disponível para compra");
       return;
@@ -182,12 +196,11 @@ const AthletePage = () => {
 
     setBuying(true);
     try {
-      // Use RPC function for atomic purchase (bypasses RLS safely)
-      const { error: rpcError } = await supabase.rpc('purchase_tokens', {
+      const { data, error: rpcError } = await supabase.rpc('place_purchase_order', {
         p_athlete_token_id: athlete.dbId,
         p_athlete_id: athlete.id,
         p_quantity: tokenAmount,
-        p_price: athlete.tokenPrice
+        p_limit_price: limitPriceNum
       });
 
       if (rpcError) {
@@ -199,16 +212,23 @@ const AthletePage = () => {
         throw rpcError;
       }
 
-      toast.success(`Compra realizada! ${tokenAmount} tokens de ${athlete.name} por R$ ${totalPrice.toFixed(2)}`);
-      
-      setTokenAmount(1);
-      
-      // Reload athlete data to ensure sync
+      const executed = data?.executed === true;
+
+      if (executed) {
+        toast.success(`Compra realizada! ${tokenAmount} tokens de ${athlete.name} por R$ ${totalAtLimit.toFixed(2)}`);
+        setTokenAmount(1);
+        setLimitPrice(athlete.tokenPrice.toFixed(2));
+      } else {
+        toast.success(
+          `Ordem em espera! Você será comprado ${tokenAmount} tokens de ${athlete.name} quando o preço chegar a R$ ${limitPriceNum.toFixed(2)}`
+        );
+        setTokenAmount(1);
+      }
+
       await loadAthlete();
     } catch (error) {
       console.error('Error buying tokens:', error);
       toast.error('Erro ao comprar tokens. Tente novamente.');
-      // Reload to show correct data
       await loadAthlete();
     } finally {
       setBuying(false);
@@ -350,9 +370,28 @@ const AthletePage = () => {
                       />
                     </div>
 
+                    <div>
+                      <label className="text-sm font-medium mb-2 block">
+                        Preço desejado por token (R$)
+                      </label>
+                      <Input
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        value={limitPrice}
+                        onChange={(e) => setLimitPrice(e.target.value)}
+                        placeholder={athlete.tokenPrice.toFixed(2)}
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Compre agora ao preço de mercado ou defina um preço máximo e aguarde.
+                      </p>
+                    </div>
+
                     <div className="p-4 rounded-lg bg-secondary/50 border border-border">
-                      <p className="text-sm text-muted-foreground mb-1">Total</p>
-                      <p className="text-2xl font-bold">${totalPrice.toFixed(2)}</p>
+                      <p className="text-sm text-muted-foreground mb-1">
+                        {limitPriceNum <= athlete.tokenPrice ? "Total (compra imediata)" : "Total (quando preço atingir)"}
+                      </p>
+                      <p className="text-2xl font-bold">R$ {totalAtLimit.toFixed(2)}</p>
                     </div>
 
                     <Button 

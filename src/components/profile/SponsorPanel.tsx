@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { TrendingUp, TrendingDown } from "lucide-react";
+import { TrendingUp, TrendingDown, Clock } from "lucide-react";
 import { mockAthletes } from "@/data/mockAthletes";
 import { toast } from "sonner";
 
@@ -18,12 +18,21 @@ interface UserToken {
   purchased_at: string;
 }
 
+interface PendingPurchase {
+  id: string;
+  athlete_id: string;
+  quantity: number;
+  limit_price: number;
+  created_at: string;
+}
+
 interface SponsorPanelProps {
   userId: string;
 }
 
 export function SponsorPanel({ userId }: SponsorPanelProps) {
   const [tokens, setTokens] = useState<UserToken[]>([]);
+  const [pendingPurchases, setPendingPurchases] = useState<PendingPurchase[]>([]);
   const [loading, setLoading] = useState(true);
   const [athletesData, setAthletesData] = useState<Map<string, any>>(new Map());
 
@@ -33,9 +42,11 @@ export function SponsorPanel({ userId }: SponsorPanelProps) {
   const [sellQuantity, setSellQuantity] = useState(1);
   const [sellPrice, setSellPrice] = useState("");
   const [selling, setSelling] = useState(false);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
 
   useEffect(() => {
     loadTokens();
+    loadPendingPurchases();
   }, [userId]);
 
   const loadTokens = async () => {
@@ -55,12 +66,30 @@ export function SponsorPanel({ userId }: SponsorPanelProps) {
     }
   };
 
+  const loadPendingPurchases = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('pending_purchases')
+        .select('id, athlete_id, quantity, limit_price, created_at')
+        .eq('user_id', userId)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setPendingPurchases(data || []);
+    } catch (error) {
+      console.error('Error loading pending purchases:', error);
+    }
+  };
+
   useEffect(() => {
-    if (tokens.length > 0) loadAthletesData();
-  }, [tokens]);
+    if (tokens.length > 0 || pendingPurchases.length > 0) loadAthletesData();
+  }, [tokens, pendingPurchases]);
 
   const loadAthletesData = async () => {
-    const athleteIds = tokens.map(t => t.athlete_id);
+    const tokenAthleteIds = tokens.map(t => t.athlete_id);
+    const pendingAthleteIds = pendingPurchases.map(p => p.athlete_id);
+    const athleteIds = [...new Set([...tokenAthleteIds, ...pendingAthleteIds])];
     const dataMap = new Map();
 
     const { data } = await supabase
@@ -147,6 +176,29 @@ export function SponsorPanel({ userId }: SponsorPanelProps) {
     }
   };
 
+  const handleCancelPending = async (pendingId: string) => {
+    setCancellingId(pendingId);
+    try {
+      const { data, error } = await supabase.rpc('cancel_pending_purchase', {
+        p_pending_purchase_id: pendingId
+      });
+
+      if (error) throw error;
+
+      if (data?.success) {
+        toast.success('Ordem cancelada');
+        await loadPendingPurchases();
+      } else {
+        toast.error(data?.message || 'Erro ao cancelar ordem');
+      }
+    } catch (error: any) {
+      console.error('Error cancelling pending purchase:', error);
+      toast.error(error.message || 'Erro ao cancelar ordem');
+    } finally {
+      setCancellingId(null);
+    }
+  };
+
   if (loading) {
     return <div>Carregando tokens...</div>;
   }
@@ -181,6 +233,66 @@ export function SponsorPanel({ userId }: SponsorPanelProps) {
           </CardHeader>
         </Card>
       </div>
+
+      {/* Compras em espera */}
+      {pendingPurchases.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Clock className="w-5 h-5" />
+              Compras em espera
+            </CardTitle>
+            <CardDescription>
+              Ordens limitadas aguardando o token alcançar o preço desejado
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {pendingPurchases.map((order) => {
+                const athlete = getAthleteInfo(order.athlete_id);
+                const createdDate = new Date(order.created_at).toLocaleDateString('pt-BR', {
+                  day: '2-digit',
+                  month: '2-digit',
+                  year: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                });
+                return (
+                  <div
+                    key={order.id}
+                    className="flex items-center justify-between p-4 border rounded-lg bg-muted/30"
+                  >
+                    <div className="flex items-center gap-4">
+                      {athlete?.avatar && (
+                        <img
+                          src={athlete.avatar}
+                          alt={athlete?.name || 'Atleta'}
+                          className="w-12 h-12 rounded-full object-cover"
+                        />
+                      )}
+                      <div>
+                        <h4 className="font-semibold">{athlete?.name || 'Atleta'}</h4>
+                        <p className="text-sm text-muted-foreground">
+                          {order.quantity} tokens • Preço limite: R$ {order.limit_price.toFixed(2)}
+                        </p>
+                        <p className="text-xs text-muted-foreground">Criada em {createdDate}</p>
+                      </div>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleCancelPending(order.id)}
+                      disabled={cancellingId === order.id}
+                    >
+                      {cancellingId === order.id ? 'Cancelando...' : 'Cancelar ordem'}
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Tokens List */}
       <Card>
