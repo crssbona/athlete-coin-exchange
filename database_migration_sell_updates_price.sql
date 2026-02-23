@@ -3,6 +3,9 @@
 --
 -- When a sponsor sells tokens at a price, that price becomes the new market price.
 -- This triggers the existing after_athlete_price_update, which processes pending limit orders.
+--
+-- IMPORTANT: This function uses SECURITY DEFINER to bypass RLS when updating/deleting user_tokens.
+-- Ensure this migration is applied; an older sell_tokens in Supabase may not remove tokens correctly.
 
 create or replace function public.sell_tokens(
     p_user_token_id uuid,

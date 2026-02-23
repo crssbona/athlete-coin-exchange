@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { TrendingUp, TrendingDown, Clock } from "lucide-react";
+import { TrendingUp, TrendingDown, Clock, ArrowUpRight } from "lucide-react";
 import { mockAthletes } from "@/data/mockAthletes";
 import { toast } from "sonner";
 
@@ -33,6 +33,7 @@ interface SponsorPanelProps {
 export function SponsorPanel({ userId }: SponsorPanelProps) {
   const [tokens, setTokens] = useState<UserToken[]>([]);
   const [pendingPurchases, setPendingPurchases] = useState<PendingPurchase[]>([]);
+  const [pendingSales, setPendingSales] = useState<PendingSale[]>([]);
   const [loading, setLoading] = useState(true);
   const [athletesData, setAthletesData] = useState<Map<string, any>>(new Map());
 
@@ -43,10 +44,12 @@ export function SponsorPanel({ userId }: SponsorPanelProps) {
   const [sellPrice, setSellPrice] = useState("");
   const [selling, setSelling] = useState(false);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [cancellingSaleId, setCancellingSaleId] = useState<string | null>(null);
 
   useEffect(() => {
     loadTokens();
     loadPendingPurchases();
+    loadPendingSales();
   }, [userId]);
 
   const loadTokens = async () => {
@@ -82,14 +85,31 @@ export function SponsorPanel({ userId }: SponsorPanelProps) {
     }
   };
 
+  const loadPendingSales = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('pending_sales')
+        .select('id, athlete_id, quantity, limit_price, created_at')
+        .eq('user_id', userId)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setPendingSales(data || []);
+    } catch (error) {
+      console.error('Error loading pending sales:', error);
+    }
+  };
+
   useEffect(() => {
-    if (tokens.length > 0 || pendingPurchases.length > 0) loadAthletesData();
-  }, [tokens, pendingPurchases]);
+    if (tokens.length > 0 || pendingPurchases.length > 0 || pendingSales.length > 0) loadAthletesData();
+  }, [tokens, pendingPurchases, pendingSales]);
 
   const loadAthletesData = async () => {
     const tokenAthleteIds = tokens.map(t => t.athlete_id);
     const pendingAthleteIds = pendingPurchases.map(p => p.athlete_id);
-    const athleteIds = [...new Set([...tokenAthleteIds, ...pendingAthleteIds])];
+    const pendingSaleAthleteIds = pendingSales.map(p => p.athlete_id);
+    const athleteIds = [...new Set([...tokenAthleteIds, ...pendingAthleteIds, ...pendingSaleAthleteIds])];
     const dataMap = new Map();
 
     const { data } = await supabase
@@ -155,7 +175,7 @@ export function SponsorPanel({ userId }: SponsorPanelProps) {
 
     setSelling(true);
     try {
-      const { error } = await supabase.rpc('sell_tokens', {
+      const { data, error } = await supabase.rpc('place_sell_order', {
         p_user_token_id: selectedToken.id,
         p_athlete_id: selectedToken.athlete_id,
         p_quantity: sellQuantity,
@@ -163,11 +183,26 @@ export function SponsorPanel({ userId }: SponsorPanelProps) {
       });
 
       if (error) throw error;
+      if (data?.error) {
+        toast.error(data.message || 'Erro ao criar ordem de venda');
+        return;
+      }
 
       const athlete = getAthleteInfo(selectedToken.athlete_id);
-      toast.success(`Venda realizada! ${sellQuantity} tokens de ${athlete?.name || 'atleta'} por R$ ${(price * sellQuantity).toFixed(2)}`);
-      setSellDialogOpen(false);
-      await loadTokens();
+      const executed = data?.executed === true;
+
+      if (executed) {
+        toast.success(`Venda realizada! ${sellQuantity} tokens de ${athlete?.name || 'atleta'} por R$ ${(price * sellQuantity).toFixed(2)}`);
+        setSellDialogOpen(false);
+        await loadTokens();
+      } else {
+        toast.success(
+          `Venda em espera! Seus ${sellQuantity} tokens de ${athlete?.name || 'atleta'} serão vendidos quando o preço chegar a R$ ${price.toFixed(2)}`
+        );
+        setSellDialogOpen(false);
+        await loadTokens();
+        await loadPendingSales();
+      }
     } catch (error: any) {
       console.error('Error selling tokens:', error);
       toast.error(error.message || 'Erro ao vender tokens');
@@ -196,6 +231,29 @@ export function SponsorPanel({ userId }: SponsorPanelProps) {
       toast.error(error.message || 'Erro ao cancelar ordem');
     } finally {
       setCancellingId(null);
+    }
+  };
+
+  const handleCancelPendingSale = async (pendingSaleId: string) => {
+    setCancellingSaleId(pendingSaleId);
+    try {
+      const { data, error } = await supabase.rpc('cancel_pending_sale', {
+        p_pending_sale_id: pendingSaleId
+      });
+
+      if (error) throw error;
+
+      if (data?.success) {
+        toast.success('Venda cancelada');
+        await loadPendingSales();
+      } else {
+        toast.error(data?.message || 'Erro ao cancelar venda');
+      }
+    } catch (error: any) {
+      console.error('Error cancelling pending sale:', error);
+      toast.error(error.message || 'Erro ao cancelar venda');
+    } finally {
+      setCancellingSaleId(null);
     }
   };
 
@@ -285,6 +343,66 @@ export function SponsorPanel({ userId }: SponsorPanelProps) {
                       disabled={cancellingId === order.id}
                     >
                       {cancellingId === order.id ? 'Cancelando...' : 'Cancelar ordem'}
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Vendas em espera */}
+      {pendingSales.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <ArrowUpRight className="w-5 h-5" />
+              Vendas em espera
+            </CardTitle>
+            <CardDescription>
+              Ordens limitadas aguardando o token alcançar o preço desejado
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {pendingSales.map((sale) => {
+                const athlete = getAthleteInfo(sale.athlete_id);
+                const createdDate = new Date(sale.created_at).toLocaleDateString('pt-BR', {
+                  day: '2-digit',
+                  month: '2-digit',
+                  year: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                });
+                return (
+                  <div
+                    key={sale.id}
+                    className="flex items-center justify-between p-4 border rounded-lg bg-muted/30"
+                  >
+                    <div className="flex items-center gap-4">
+                      {athlete?.avatar && (
+                        <img
+                          src={athlete.avatar}
+                          alt={athlete?.name || 'Atleta'}
+                          className="w-12 h-12 rounded-full object-cover"
+                        />
+                      )}
+                      <div>
+                        <h4 className="font-semibold">{athlete?.name || 'Atleta'}</h4>
+                        <p className="text-sm text-muted-foreground">
+                          {sale.quantity} tokens • Preço mínimo: R$ {sale.limit_price.toFixed(2)}
+                        </p>
+                        <p className="text-xs text-muted-foreground">Criada em {createdDate}</p>
+                      </div>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleCancelPendingSale(sale.id)}
+                      disabled={cancellingSaleId === sale.id}
+                    >
+                      {cancellingSaleId === sale.id ? 'Cancelando...' : 'Cancelar venda'}
                     </Button>
                   </div>
                 );
@@ -397,6 +515,10 @@ export function SponsorPanel({ userId }: SponsorPanelProps) {
                   value={sellPrice}
                   onChange={(e) => setSellPrice(e.target.value)}
                 />
+                <p className="text-xs text-muted-foreground">
+                  Preço atual: R$ {selectedToken && getAthleteInfo(selectedToken.athlete_id)?.tokenPrice?.toFixed(2)}.
+                  Venda abaixo ou igual: imediata. Acima: ordem em espera.
+                </p>
               </div>
               <div className="p-4 rounded-lg bg-secondary/50 border border-border">
                 <p className="text-sm text-muted-foreground mb-1">Total da venda</p>
