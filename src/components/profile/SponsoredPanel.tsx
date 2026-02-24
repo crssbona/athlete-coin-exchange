@@ -35,7 +35,7 @@ interface SponsoredPanelProps {
 export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
   const [athleteToken, setAthleteToken] = useState<AthleteToken | null>(null);
   const [loading, setLoading] = useState(true);
-  const [newTokens, setNewTokens] = useState(10000);
+  const [newTokens, setNewTokens] = useState(100);
   const [newPrice, setNewPrice] = useState(10);
   
   // Profile fields
@@ -74,6 +74,11 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
     try {
       if (!athleteName || !sport || !description) {
         toast.error('Preencha todos os campos obrigatórios');
+        return;
+      }
+
+      if (newTokens > 100) {
+        toast.error('O máximo de tokens permitido é 100');
         return;
       }
 
@@ -117,10 +122,16 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
     if (!athleteToken) return;
 
     try {
+      const newTotal = athleteToken.total_tokens + newTokens;
+      if (newTotal > 100) {
+        toast.error(`Limite máximo é 100 tokens. Você já tem ${athleteToken.total_tokens}, pode gerar no máximo ${100 - athleteToken.total_tokens}.`);
+        return;
+      }
+
       const { error } = await supabase
         .from('athlete_tokens')
         .update({
-          total_tokens: athleteToken.total_tokens + newTokens,
+          total_tokens: newTotal,
           available_tokens: athleteToken.available_tokens + newTokens
         })
         .eq('id', athleteToken.id);
@@ -269,8 +280,9 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
                   type="number"
                   value={newTokens}
                   onChange={(e) => setNewTokens(Number(e.target.value))}
-                  min="1000"
-                  step="1000"
+                  min="1"
+                  max="100"
+                  step="1"
                 />
               </div>
               <div>
@@ -352,8 +364,9 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
                 type="number"
                 value={newTokens}
                 onChange={(e) => setNewTokens(Number(e.target.value))}
-                min="1000"
-                step="1000"
+                min="1"
+                max={100 - athleteToken.total_tokens}
+                step="1"
               />
             </div>
             <Button onClick={generateMoreTokens} className="w-full">
