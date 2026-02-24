@@ -77,22 +77,23 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
         return;
       }
 
-      if (newTokens > 100) {
-        toast.error('O máximo de tokens permitido é 100');
-        return;
+      const clampedTokens = Math.min(Math.max(Math.floor(newTokens), 1), 100);
+
+      if (clampedTokens !== newTokens) {
+        setNewTokens(clampedTokens);
       }
 
       const athleteId = `athlete-${userId.substring(0, 8)}`;
       const achievementsArray = achievements.split('\n').filter(a => a.trim());
-      const marketCap = newTokens * newPrice;
+      const marketCap = clampedTokens * newPrice;
       
       const { error } = await supabase
         .from('athlete_tokens')
         .insert({
           athlete_id: athleteId,
           user_id: userId,
-          total_tokens: newTokens,
-          available_tokens: newTokens,
+          total_tokens: clampedTokens,
+          available_tokens: clampedTokens,
           price_per_token: newPrice,
           athlete_name: athleteName,
           sport: sport,
@@ -122,17 +123,20 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
     if (!athleteToken) return;
 
     try {
-      const newTotal = athleteToken.total_tokens + newTokens;
-      if (newTotal > 100) {
-        toast.error(`Limite máximo é 100 tokens. Você já tem ${athleteToken.total_tokens}, pode gerar no máximo ${100 - athleteToken.total_tokens}.`);
+      const clamped = Math.min(Math.max(Math.floor(newTokens), 1), 100);
+      const remaining = 100 - athleteToken.total_tokens;
+      if (remaining <= 0) {
+        toast.error('Você já atingiu o limite de 100 tokens.');
         return;
       }
+      const toGenerate = Math.min(clamped, remaining);
+      const newTotal = athleteToken.total_tokens + toGenerate;
 
       const { error } = await supabase
         .from('athlete_tokens')
         .update({
           total_tokens: newTotal,
-          available_tokens: athleteToken.available_tokens + newTokens
+          available_tokens: athleteToken.available_tokens + toGenerate
         })
         .eq('id', athleteToken.id);
 
@@ -283,6 +287,7 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
                   min="1"
                   max="100"
                   step="1"
+                  onBlur={() => { if (newTokens > 100) setNewTokens(100); if (newTokens < 1) setNewTokens(1); }}
                 />
               </div>
               <div>
