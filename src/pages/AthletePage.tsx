@@ -204,31 +204,29 @@ const AthletePage = () => {
       });
 
       if (rpcError) {
-        if (rpcError.message.includes('Not enough tokens')) {
-          toast.error('Tokens insuficientes disponíveis');
-          await loadAthlete();
-          return;
-        }
         throw rpcError;
       }
 
       const executed = data?.executed === true;
+      const pending = data?.pending === true;
 
       if (executed) {
         toast.success(`Compra realizada! ${tokenAmount} tokens de ${athlete.name} por R$ ${totalAtLimit.toFixed(2)}`);
         setTokenAmount(1);
         setLimitPrice(athlete.tokenPrice.toFixed(2));
-      } else {
+      } else if (pending) {
         toast.success(
-          `Ordem em espera! Você será comprado ${tokenAmount} tokens de ${athlete.name} quando o preço chegar a R$ ${limitPriceNum.toFixed(2)}`
+          `Ordem em espera! Seus ${tokenAmount} tokens de ${athlete.name} serão comprados quando alguém vender por ≤ R$ ${limitPriceNum.toFixed(2)}`
         );
         setTokenAmount(1);
+      } else {
+        toast.info('Ordem registrada.');
       }
 
       await loadAthlete();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error buying tokens:', error);
-      toast.error('Erro ao comprar tokens. Tente novamente.');
+      toast.error(error.message || 'Erro ao comprar tokens. Tente novamente.');
       await loadAthlete();
     } finally {
       setBuying(false);
@@ -364,7 +362,7 @@ const AthletePage = () => {
                       <Input
                         type="number"
                         min="1"
-                        max={athlete.availableTokens}
+                        max={athlete.availableTokens > 0 ? athlete.availableTokens : undefined}
                         value={tokenAmount}
                         onChange={(e) => setTokenAmount(Math.max(1, parseInt(e.target.value) || 1))}
                       />
@@ -372,7 +370,7 @@ const AthletePage = () => {
 
                     <div>
                       <label className="text-sm font-medium mb-2 block">
-                        Preço desejado por token (R$)
+                        Preço máximo por token (R$)
                       </label>
                       <Input
                         type="number"
@@ -382,14 +380,22 @@ const AthletePage = () => {
                         onChange={(e) => setLimitPrice(e.target.value)}
                         placeholder={athlete.tokenPrice.toFixed(2)}
                       />
-                      <p className="text-xs text-muted-foreground mt-1">
-                        Compre agora ao preço de mercado ou defina um preço máximo e aguarde.
-                      </p>
+                      {athlete.availableTokens > 0 ? (
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Compra imediata se houver tokens disponíveis, ou fica em espera.
+                        </p>
+                      ) : (
+                        <p className="text-xs text-yellow-500 mt-1 font-medium">
+                          Todos os tokens estão em posse de patrocinadores. Sua ordem ficará em espera até que alguém venda por ≤ R$ {limitPrice || '0.00'}.
+                        </p>
+                      )}
                     </div>
 
                     <div className="p-4 rounded-lg bg-secondary/50 border border-border">
                       <p className="text-sm text-muted-foreground mb-1">
-                        {limitPriceNum <= athlete.tokenPrice ? "Total (compra imediata)" : "Total (quando preço atingir)"}
+                        {athlete.availableTokens > 0 && limitPriceNum <= athlete.tokenPrice
+                          ? "Total (compra imediata)"
+                          : "Total (ordem em espera)"}
                       </p>
                       <p className="text-2xl font-bold">R$ {totalAtLimit.toFixed(2)}</p>
                     </div>
@@ -401,7 +407,11 @@ const AthletePage = () => {
                       onClick={handleBuy}
                       disabled={buying}
                     >
-                      {buying ? 'Processando...' : 'Comprar Tokens'}
+                      {buying
+                        ? 'Processando...'
+                        : athlete.availableTokens > 0
+                          ? 'Comprar Tokens'
+                          : 'Criar Ordem de Compra'}
                     </Button>
                     <Button 
                       variant="outline" 

@@ -35,7 +35,7 @@ interface SponsoredPanelProps {
 export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
   const [athleteToken, setAthleteToken] = useState<AthleteToken | null>(null);
   const [loading, setLoading] = useState(true);
-  const [newTokens, setNewTokens] = useState(10000);
+  const [newTokens, setNewTokens] = useState(100);
   const [newPrice, setNewPrice] = useState(10);
   
   // Profile fields
@@ -77,17 +77,23 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
         return;
       }
 
+      const clampedTokens = Math.min(Math.max(Math.floor(newTokens), 1), 100);
+
+      if (clampedTokens !== newTokens) {
+        setNewTokens(clampedTokens);
+      }
+
       const athleteId = `athlete-${userId.substring(0, 8)}`;
       const achievementsArray = achievements.split('\n').filter(a => a.trim());
-      const marketCap = newTokens * newPrice;
+      const marketCap = clampedTokens * newPrice;
       
       const { error } = await supabase
         .from('athlete_tokens')
         .insert({
           athlete_id: athleteId,
           user_id: userId,
-          total_tokens: newTokens,
-          available_tokens: newTokens,
+          total_tokens: clampedTokens,
+          available_tokens: clampedTokens,
           price_per_token: newPrice,
           athlete_name: athleteName,
           sport: sport,
@@ -117,11 +123,20 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
     if (!athleteToken) return;
 
     try {
+      const clamped = Math.min(Math.max(Math.floor(newTokens), 1), 100);
+      const remaining = 100 - athleteToken.total_tokens;
+      if (remaining <= 0) {
+        toast.error('Você já atingiu o limite de 100 tokens.');
+        return;
+      }
+      const toGenerate = Math.min(clamped, remaining);
+      const newTotal = athleteToken.total_tokens + toGenerate;
+
       const { error } = await supabase
         .from('athlete_tokens')
         .update({
-          total_tokens: athleteToken.total_tokens + newTokens,
-          available_tokens: athleteToken.available_tokens + newTokens
+          total_tokens: newTotal,
+          available_tokens: athleteToken.available_tokens + toGenerate
         })
         .eq('id', athleteToken.id);
 
@@ -269,8 +284,10 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
                   type="number"
                   value={newTokens}
                   onChange={(e) => setNewTokens(Number(e.target.value))}
-                  min="1000"
-                  step="1000"
+                  min="1"
+                  max="100"
+                  step="1"
+                  onBlur={() => { if (newTokens > 100) setNewTokens(100); if (newTokens < 1) setNewTokens(1); }}
                 />
               </div>
               <div>
@@ -352,8 +369,9 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
                 type="number"
                 value={newTokens}
                 onChange={(e) => setNewTokens(Number(e.target.value))}
-                min="1000"
-                step="1000"
+                min="1"
+                max={100 - athleteToken.total_tokens}
+                step="1"
               />
             </div>
             <Button onClick={generateMoreTokens} className="w-full">

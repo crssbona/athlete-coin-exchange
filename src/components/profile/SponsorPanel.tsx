@@ -26,6 +26,14 @@ interface PendingPurchase {
   created_at: string;
 }
 
+interface PendingSale {
+  id: string;
+  athlete_id: string;
+  quantity: number;
+  limit_price: number;
+  created_at: string;
+}
+
 interface SponsorPanelProps {
   userId: string;
 }
