@@ -23,7 +23,6 @@ const Marketplace = () => {
       const { data, error } = await supabase
         .from('athlete_tokens')
         .select('*')
-        .gt('available_tokens', 0);
 
       if (error) throw error;
 
@@ -64,7 +63,7 @@ const Marketplace = () => {
 
   const filteredAthletes = athletes.filter((athlete) => {
     const matchesSearch = athlete.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         athlete.sport.toLowerCase().includes(searchTerm.toLowerCase());
+      athlete.sport.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesSport = sportFilter === "all" || athlete.sport.includes(sportFilter);
     return matchesSearch && matchesSport;
   });
@@ -74,7 +73,7 @@ const Marketplace = () => {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      
+
       <main className="pt-24 pb-12">
         <div className="container mx-auto px-4">
           {/* Header */}
