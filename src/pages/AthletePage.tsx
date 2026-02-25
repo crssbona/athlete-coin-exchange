@@ -236,7 +236,7 @@ const AthletePage = () => {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      
+
       <main className="pt-24 pb-12">
         <div className="container mx-auto px-4">
           <Link to="/marketplace">
@@ -386,7 +386,7 @@ const AthletePage = () => {
                         </p>
                       ) : (
                         <p className="text-xs text-yellow-500 mt-1 font-medium">
-                          Todos os tokens estão em posse de patrocinadores. Sua ordem ficará em espera até que alguém venda por ≤ R$ {limitPrice || '0.00'}.
+                          Todos os tokens estão em posse de patrocinadores. Sua ordem ficará em espera até que alguém venda por um valor menor ou igual a R$ {limitPrice || '0.00'}.
                         </p>
                       )}
                     </div>
@@ -400,9 +400,9 @@ const AthletePage = () => {
                       <p className="text-2xl font-bold">R$ {totalAtLimit.toFixed(2)}</p>
                     </div>
 
-                    <Button 
-                      variant="buy" 
-                      size="lg" 
+                    <Button
+                      variant="buy"
+                      size="lg"
                       className="w-full"
                       onClick={handleBuy}
                       disabled={buying}
@@ -413,9 +413,9 @@ const AthletePage = () => {
                           ? 'Comprar Tokens'
                           : 'Criar Ordem de Compra'}
                     </Button>
-                    <Button 
-                      variant="outline" 
-                      size="lg" 
+                    <Button
+                      variant="outline"
+                      size="lg"
                       className="w-full"
                       onClick={toggleWatchlist}
                       disabled={watchlistLoading}

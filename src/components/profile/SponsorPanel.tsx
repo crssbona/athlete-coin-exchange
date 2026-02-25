@@ -38,16 +38,26 @@ interface SponsorPanelProps {
   userId: string;
 }
 
+interface TransactionRecord {
+  id: string;
+  athlete_id: string;
+  type: 'buy' | 'sell';
+  quantity: number;
+  price: number;
+  created_at: string;
+}
+
 export function SponsorPanel({ userId }: SponsorPanelProps) {
   const [tokens, setTokens] = useState<UserToken[]>([]);
   const [pendingPurchases, setPendingPurchases] = useState<PendingPurchase[]>([]);
   const [pendingSales, setPendingSales] = useState<PendingSale[]>([]);
+  const [transactions, setTransactions] = useState<TransactionRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [athletesData, setAthletesData] = useState<Map<string, any>>(new Map());
 
   // Sell dialog state
   const [sellDialogOpen, setSellDialogOpen] = useState(false);
-  const [selectedToken, setSelectedToken] = useState<UserToken | null>(null);
+  const [selectedWalletItem, setSelectedWalletItem] = useState<any>(null);
   const [sellQuantity, setSellQuantity] = useState(1);
   const [sellPrice, setSellPrice] = useState("");
   const [selling, setSelling] = useState(false);
@@ -58,7 +68,28 @@ export function SponsorPanel({ userId }: SponsorPanelProps) {
     loadTokens();
     loadPendingPurchases();
     loadPendingSales();
+    loadTransactions(); // <-- ADICIONE AQUI
   }, [userId]);
+
+  const loadTransactions = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('transactions')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setTransactions(data || []);
+    } catch (error) {
+      console.error('Error loading transactions:', error);
+    }
+  };
+
+  // Atualize este useEffect para reagir também às transações
+  useEffect(() => {
+    if (tokens.length > 0 || pendingPurchases.length > 0 || pendingSales.length > 0 || transactions.length > 0) loadAthletesData();
+  }, [tokens, pendingPurchases, pendingSales, transactions]);
 
   const loadTokens = async () => {
     try {
@@ -117,7 +148,8 @@ export function SponsorPanel({ userId }: SponsorPanelProps) {
     const tokenAthleteIds = tokens.map(t => t.athlete_id);
     const pendingAthleteIds = pendingPurchases.map(p => p.athlete_id);
     const pendingSaleAthleteIds = pendingSales.map(p => p.athlete_id);
-    const athleteIds = [...new Set([...tokenAthleteIds, ...pendingAthleteIds, ...pendingSaleAthleteIds])];
+    const txAthleteIds = transactions.map(t => t.athlete_id);
+    const athleteIds = [...new Set([...tokenAthleteIds, ...pendingAthleteIds, ...pendingSaleAthleteIds, ...txAthleteIds])];
     const dataMap = new Map();
 
     const { data } = await supabase
@@ -160,57 +192,90 @@ export function SponsorPanel({ userId }: SponsorPanelProps) {
   const getTotalInvested = () =>
     tokens.reduce((sum, token) => sum + token.quantity * token.purchase_price, 0);
 
-  const openSellDialog = (token: UserToken) => {
-    const athlete = getAthleteInfo(token.athlete_id);
-    setSelectedToken(token);
+  // Agrupa os tokens por atleta para montar a visualização da Carteira
+  const groupedTokens = tokens.reduce((acc, token) => {
+    if (!acc[token.athlete_id]) {
+      acc[token.athlete_id] = {
+        athlete_id: token.athlete_id,
+        totalQuantity: 0,
+        totalInvested: 0,
+        tokens: [] // Guardamos os tokens originais caso precise
+      };
+    }
+    acc[token.athlete_id].totalQuantity += token.quantity;
+    acc[token.athlete_id].totalInvested += (token.quantity * token.purchase_price);
+    acc[token.athlete_id].tokens.push(token);
+    return acc;
+  }, {} as Record<string, { athlete_id: string, totalQuantity: number, totalInvested: number, tokens: UserToken[] }>);
+
+  const walletItems = Object.values(groupedTokens);
+
+  const openSellDialog = (walletItem: any) => {
+    const athlete = getAthleteInfo(walletItem.athlete_id);
+    setSelectedWalletItem(walletItem); // Agora salva a carteira agrupada
     setSellQuantity(1);
     setSellPrice(athlete?.tokenPrice?.toFixed(2) || "0");
     setSellDialogOpen(true);
   };
 
   const handleSell = async () => {
-    if (!selectedToken) return;
+    if (!selectedWalletItem) return;
 
     const price = parseFloat(sellPrice);
     if (isNaN(price) || price <= 0) {
       toast.error("Preço de venda inválido");
       return;
     }
-    if (sellQuantity <= 0 || sellQuantity > selectedToken.quantity) {
+    if (sellQuantity <= 0 || sellQuantity > selectedWalletItem.totalQuantity) {
       toast.error("Quantidade inválida");
       return;
     }
 
     setSelling(true);
     try {
-      const { data, error } = await supabase.rpc('place_sell_order', {
-        p_user_token_id: selectedToken.id,
-        p_athlete_id: selectedToken.athlete_id,
-        p_quantity: sellQuantity,
-        p_sell_price: price
-      });
+      let remainingToSell = sellQuantity;
+      let somePending = false;
+      let someExecuted = false;
 
-      if (error) throw error;
-      if (data?.error) {
-        toast.error(data.message || 'Erro ao criar ordem de venda');
-        return;
+      // Ordenar os tokens pelos mais antigos primeiro (FIFO - First In First Out)
+      const sortedTokens = [...selectedWalletItem.tokens].sort((a, b) =>
+        new Date(a.purchased_at).getTime() - new Date(b.purchased_at).getTime()
+      );
+
+      // Passa por todos os lotes do usuário até atingir a quantidade que ele quer vender
+      for (const token of sortedTokens) {
+        if (remainingToSell <= 0) break;
+
+        const qtyFromBatch = Math.min(token.quantity, remainingToSell);
+
+        const { data, error } = await supabase.rpc('place_sell_order', {
+          p_user_token_id: token.id,
+          p_athlete_id: token.athlete_id,
+          p_quantity: qtyFromBatch,
+          p_sell_price: price
+        });
+
+        if (error) throw error;
+
+        if (data?.executed) someExecuted = true;
+        if (data?.pending) somePending = true;
+
+        remainingToSell -= qtyFromBatch;
       }
 
-      const athlete = getAthleteInfo(selectedToken.athlete_id);
-      const executed = data?.executed === true;
+      const athlete = getAthleteInfo(selectedWalletItem.athlete_id);
 
-      if (executed) {
-        toast.success(`Venda realizada! ${sellQuantity} tokens de ${athlete?.name || 'atleta'} por R$ ${(price * sellQuantity).toFixed(2)}`);
-        setSellDialogOpen(false);
-        await loadTokens();
+      if (someExecuted && !somePending) {
+        toast.success(`Venda realizada! ${sellQuantity} tokens de ${athlete?.name || 'atleta'}`);
+      } else if (somePending && !someExecuted) {
+        toast.success(`Venda em espera! ${sellQuantity} tokens de ${athlete?.name || 'atleta'} aguardam o preço chegar a R$ ${price.toFixed(2)}`);
       } else {
-        toast.success(
-          `Venda em espera! Seus ${sellQuantity} tokens de ${athlete?.name || 'atleta'} serão vendidos quando o preço chegar a R$ ${price.toFixed(2)}`
-        );
-        setSellDialogOpen(false);
-        await loadTokens();
-        await loadPendingSales();
+        toast.success(`Ordem processada! Parte executada e parte em espera.`);
       }
+
+      setSellDialogOpen(false);
+      await loadTokens();
+      await loadPendingSales();
     } catch (error: any) {
       console.error('Error selling tokens:', error);
       toast.error(error.message || 'Erro ao vender tokens');
@@ -420,30 +485,32 @@ export function SponsorPanel({ userId }: SponsorPanelProps) {
         </Card>
       )}
 
-      {/* Tokens List */}
-      <Card>
+      {/* Minha Carteira */}
+      <Card className="mb-6">
         <CardHeader>
-          <CardTitle>Meus Tokens</CardTitle>
-          <CardDescription>Tokens que você comprou no marketplace</CardDescription>
+          <CardTitle>Minha Carteira</CardTitle>
+          <CardDescription>Resumo dos seus ativos consolidados por atleta</CardDescription>
         </CardHeader>
         <CardContent>
-          {tokens.length === 0 ? (
+          {walletItems.length === 0 ? (
             <p className="text-muted-foreground text-center py-8">
-              Você ainda não comprou nenhum token. Visite o marketplace para começar!
+              Sua carteira está vazia.
             </p>
           ) : (
             <div className="space-y-4">
-              {tokens.map((token) => {
-                const athlete = getAthleteInfo(token.athlete_id);
+              {walletItems.map((item) => {
+                const athlete = getAthleteInfo(item.athlete_id);
                 if (!athlete) return null;
 
-                const priceChange = calculatePriceChange(token.purchase_price, athlete.tokenPrice);
-                const currentValue = token.quantity * athlete.tokenPrice;
+                // Cálculos da carteira consolidada
+                const avgPrice = item.totalInvested / item.totalQuantity;
+                const currentValue = item.totalQuantity * athlete.tokenPrice;
+                const priceChange = ((athlete.tokenPrice - avgPrice) / avgPrice) * 100;
 
                 return (
                   <div
-                    key={token.id}
-                    className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors"
+                    key={item.athlete_id}
+                    className="flex items-center justify-between p-4 border rounded-lg bg-card hover:bg-accent/50 transition-colors"
                   >
                     <div className="flex items-center gap-4">
                       <img
@@ -454,13 +521,13 @@ export function SponsorPanel({ userId }: SponsorPanelProps) {
                       <div>
                         <h4 className="font-semibold">{athlete.name}</h4>
                         <p className="text-sm text-muted-foreground">
-                          {token.quantity} tokens • Compra: R$ {token.purchase_price.toFixed(2)}
+                          {item.totalQuantity} tokens • Preço Atual: R$ {athlete.tokenPrice.toFixed(2)}
                         </p>
                       </div>
                     </div>
                     <div className="flex items-center gap-4">
                       <div className="text-right">
-                        <p className="font-semibold">R$ {currentValue.toFixed(2)}</p>
+                        <p className="font-semibold text-lg">R$ {currentValue.toFixed(2)}</p>
                         <div className="flex items-center gap-1 justify-end">
                           <Badge variant={priceChange >= 0 ? "default" : "destructive"} className="text-xs">
                             {priceChange >= 0 ? '+' : ''}{priceChange.toFixed(2)}%
@@ -475,10 +542,75 @@ export function SponsorPanel({ userId }: SponsorPanelProps) {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => openSellDialog(token)}
+                        onClick={() => openSellDialog(item)}
                       >
                         Vender
                       </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Histórico de Transações */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Histórico de Transações</CardTitle>
+          <CardDescription>Seu histórico completo de compras e vendas</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {transactions.length === 0 ? (
+            <p className="text-muted-foreground text-center py-8">
+              Você ainda não realizou nenhuma transação. Visite o marketplace para começar!
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {transactions.map((tx) => {
+                const athlete = getAthleteInfo(tx.athlete_id);
+                if (!athlete) return null;
+
+                const totalValue = tx.quantity * tx.price;
+                const txDate = new Date(tx.created_at).toLocaleDateString('pt-BR', {
+                  day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                });
+                const isBuy = tx.type === 'buy';
+
+                return (
+                  <div
+                    key={tx.id}
+                    className="flex items-center justify-between p-4 border rounded-lg bg-card hover:bg-accent/50 transition-colors"
+                  >
+                    <div className="flex items-center gap-4">
+                      <img
+                        src={athlete.avatar}
+                        alt={athlete.name}
+                        className="w-12 h-12 rounded-full object-cover"
+                      />
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <h4 className="font-semibold">{athlete.name}</h4>
+                          <Badge variant={isBuy ? "default" : "destructive"} className={isBuy ? "bg-green-600 hover:bg-green-700 text-white" : ""}>
+                            {isBuy ? 'COMPRA' : 'VENDA'}
+                          </Badge>
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          {tx.quantity} tokens • R$ {tx.price.toFixed(2)} / token
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Data: {txDate}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className="text-right">
+                        <p className="text-sm text-muted-foreground mb-1">Total</p>
+                        <p className={`font-semibold text-lg ${isBuy ? 'text-foreground' : 'text-destructive'}`}>
+                          {isBuy ? '-' : '+'} R$ {totalValue.toFixed(2)}
+                        </p>
+                      </div>
                     </div>
                   </div>
                 );
@@ -494,24 +626,24 @@ export function SponsorPanel({ userId }: SponsorPanelProps) {
           <DialogHeader>
             <DialogTitle>Vender Tokens</DialogTitle>
             <DialogDescription>
-              {selectedToken && getAthleteInfo(selectedToken.athlete_id)
-                ? `Vender tokens de ${getAthleteInfo(selectedToken.athlete_id).name}`
+              {selectedWalletItem && getAthleteInfo(selectedWalletItem.athlete_id)
+                ? `Vender tokens de ${getAthleteInfo(selectedWalletItem.athlete_id).name}`
                 : 'Defina o preço e a quantidade'}
             </DialogDescription>
           </DialogHeader>
-          {selectedToken && (
+          {selectedWalletItem && (
             <div className="space-y-4 py-2">
               <p className="text-sm text-muted-foreground">
-                Você possui <span className="font-semibold text-foreground">{selectedToken.quantity}</span> tokens
+                Você possui <span className="font-semibold text-foreground">{selectedWalletItem.totalQuantity}</span> tokens
               </p>
               <div className="space-y-2">
                 <Label>Quantidade para vender</Label>
                 <Input
                   type="number"
                   min={1}
-                  max={selectedToken.quantity}
+                  max={selectedWalletItem.totalQuantity}
                   value={sellQuantity}
-                  onChange={(e) => setSellQuantity(Math.max(1, Math.min(selectedToken.quantity, parseInt(e.target.value) || 1)))}
+                  onChange={(e) => setSellQuantity(Math.max(1, Math.min(selectedWalletItem.totalQuantity, parseInt(e.target.value) || 1)))}
                 />
               </div>
               <div className="space-y-2">
@@ -524,7 +656,7 @@ export function SponsorPanel({ userId }: SponsorPanelProps) {
                   onChange={(e) => setSellPrice(e.target.value)}
                 />
                 <p className="text-xs text-muted-foreground">
-                  Preço atual: R$ {selectedToken && getAthleteInfo(selectedToken.athlete_id)?.tokenPrice?.toFixed(2)}.
+                  Preço atual: R$ {getAthleteInfo(selectedWalletItem.athlete_id)?.tokenPrice?.toFixed(2)}.
                   Venda abaixo ou igual: imediata. Acima: ordem em espera.
                 </p>
               </div>
