@@ -8,9 +8,9 @@ export const Hero = () => {
     <div className="relative min-h-screen flex items-center justify-center overflow-hidden">
       {/* Background image with overlay */}
       <div className="absolute inset-0 z-0">
-        <img 
-          src={heroImage} 
-          alt="Hero background" 
+        <img
+          src={heroImage}
+          alt="Hero background"
           className="w-full h-full object-cover opacity-30"
         />
         <div className="absolute inset-0 bg-gradient-to-b from-background via-background/95 to-background" />
@@ -30,15 +30,15 @@ export const Hero = () => {
 
           {/* Main heading */}
           <h1 className="text-5xl md:text-7xl font-bold leading-tight">
-            A Bolsa de Valores
-            <span className="block gradient-primary bg-clip-text text-transparent mt-2">
-              dos Atletas
+            A Bolsa de Valores{' '}
+            <span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+              <br /> dos atletas
             </span>
           </h1>
 
           {/* Subtitle */}
           <p className="text-xl md:text-2xl text-muted-foreground max-w-2xl mx-auto">
-            Compre, venda e negocie tokens de atletas e gamers profissionais. 
+            Compre, venda e negocie tokens de atletas e gamers profissionais.
             Seja parte do sucesso deles enquanto eles crescem.
           </p>
 

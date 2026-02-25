@@ -17,9 +17,9 @@ All colors MUST be HSL.
     --popover: 240 8% 10%;
     --popover-foreground: 0 0% 98%;
 
-    --primary: 250 95% 65%;
+    --primary: 274 69% 28%;
     --primary-foreground: 0 0% 100%;
-    --primary-glow: 250 100% 75%;
+    --primary-glow: 277 74% 57%;
 
     --secondary: 240 6% 15%;
     --secondary-foreground: 0 0% 98%;
@@ -27,7 +27,7 @@ All colors MUST be HSL.
     --muted: 240 5% 20%;
     --muted-foreground: 240 5% 65%;
 
-    --accent: 250 85% 60%;
+    --accent: 310 65% 33%;
     --accent-foreground: 0 0% 100%;
 
     --success: 142 76% 36%;
@@ -75,11 +75,11 @@ All colors MUST be HSL.
   .glow-success {
     box-shadow: 0 0 20px hsl(var(--success-glow) / 0.3);
   }
-  
+
   .glow-danger {
     box-shadow: 0 0 20px hsl(var(--danger-glow) / 0.3);
   }
-  
+
   .glow-primary {
     box-shadow: 0 0 30px hsl(var(--primary-glow) / 0.4);
   }

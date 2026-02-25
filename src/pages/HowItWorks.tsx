@@ -8,15 +8,15 @@ const HowItWorks = () => {
   return (
     <div className="min-h-screen bg-background">
       <Navbar />
-      
+
       <main className="pt-24 pb-12">
         <div className="container mx-auto px-4">
           {/* Header */}
           <div className="text-center mb-16 max-w-3xl mx-auto">
-            <h1 className="text-5xl font-bold mb-6">
-              Como Funciona o
-              <span className="block gradient-primary bg-clip-text text-transparent mt-2">
-                Opatrocinador
+            <h1 className="text-5xl font-bold mb-6 text-center">
+              Como Funciona o{' '}
+              <span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
+                <br /> Opatrocinador
               </span>
             </h1>
             <p className="text-xl text-muted-foreground">
@@ -35,7 +35,7 @@ const HowItWorks = () => {
               </CardHeader>
               <CardContent>
                 <p className="text-muted-foreground">
-                  Atletas e gamers definem quantos tokens querem criar e o preço inicial. 
+                  Atletas e gamers definem quantos tokens querem criar e o preço inicial.
                   Eles têm controle total sobre sua oferta inicial.
                 </p>
               </CardContent>
@@ -50,7 +50,7 @@ const HowItWorks = () => {
               </CardHeader>
               <CardContent>
                 <p className="text-muted-foreground">
-                  Patrocinadores compram tokens dos atletas que acreditam. 
+                  Patrocinadores compram tokens dos atletas que acreditam.
                   Não é necessário comprar grandes quantidades - você investe o quanto quiser.
                 </p>
               </CardContent>
@@ -65,7 +65,7 @@ const HowItWorks = () => {
               </CardHeader>
               <CardContent>
                 <p className="text-muted-foreground">
-                  Após a venda inicial, o mercado determina o valor. 
+                  Após a venda inicial, o mercado determina o valor.
                   Tokens podem ser negociados livremente entre investidores.
                 </p>
               </CardContent>
@@ -89,7 +89,7 @@ const HowItWorks = () => {
                     <div>
                       <h3 className="font-semibold mb-2">Defina Sua Oferta</h3>
                       <p className="text-muted-foreground">
-                        Você decide quantos tokens criar e o preço inicial. Pode ser 1.000 tokens a $10, 
+                        Você decide quantos tokens criar e o preço inicial. Pode ser 1.000 tokens a $10,
                         10.000 a $50, ou qualquer combinação que faça sentido para sua carreira.
                       </p>
                     </div>
@@ -102,7 +102,7 @@ const HowItWorks = () => {
                     <div>
                       <h3 className="font-semibold mb-2">Receba Investimento</h3>
                       <p className="text-muted-foreground">
-                        Quando investidores compram seus tokens, você recebe o valor diretamente. 
+                        Quando investidores compram seus tokens, você recebe o valor diretamente.
                         Use esse capital para equipamentos, treinamento, ou participação em campeonatos.
                       </p>
                     </div>
@@ -115,7 +115,7 @@ const HowItWorks = () => {
                     <div>
                       <h3 className="font-semibold mb-2">Cresça Com Apoio</h3>
                       <p className="text-muted-foreground">
-                        Seus investidores ganham quando você ganha. Conquistas e resultados 
+                        Seus investidores ganham quando você ganha. Conquistas e resultados
                         aumentam o valor dos tokens, criando um ciclo positivo.
                       </p>
                     </div>
@@ -139,7 +139,7 @@ const HowItWorks = () => {
                     <div>
                       <h3 className="font-semibold mb-2">Explore o Marketplace</h3>
                       <p className="text-muted-foreground">
-                        Navegue por centenas de atletas e gamers. Veja estatísticas, conquistas 
+                        Navegue por centenas de atletas e gamers. Veja estatísticas, conquistas
                         e histórico de performance antes de investir.
                       </p>
                     </div>
@@ -152,7 +152,7 @@ const HowItWorks = () => {
                     <div>
                       <h3 className="font-semibold mb-2">Compre Tokens</h3>
                       <p className="text-muted-foreground">
-                        Invista em quem você acredita. Não há valor mínimo - compre 1 token 
+                        Invista em quem você acredita. Não há valor mínimo - compre 1 token
                         ou 1.000, você decide baseado no seu orçamento e confiança.
                       </p>
                     </div>
@@ -165,7 +165,7 @@ const HowItWorks = () => {
                     <div>
                       <h3 className="font-semibold mb-2">Negocie Livremente</h3>
                       <p className="text-muted-foreground">
-                        Venda seus tokens quando quiser. Se o atleta se valorizar, você pode 
+                        Venda seus tokens quando quiser. Se o atleta se valorizar, você pode
                         vender com lucro. É um mercado livre e transparente.
                       </p>
                     </div>

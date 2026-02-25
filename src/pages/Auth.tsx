@@ -25,15 +25,15 @@ const Auth = () => {
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading(true);
-    
+
     const formData = new FormData(e.currentTarget);
     const email = formData.get("email") as string;
     const password = formData.get("password") as string;
 
     const { error } = await signIn(email, password);
-    
+
     setIsLoading(false);
-    
+
     if (error) {
       if (error.message.includes("Invalid login credentials")) {
         toast.error("Email ou senha incorretos");
@@ -52,7 +52,7 @@ const Auth = () => {
   const handleSignup = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsLoading(true);
-    
+
     const formData = new FormData(e.currentTarget);
     const firstName = formData.get("firstName") as string;
     const lastName = formData.get("lastName") as string;
@@ -135,10 +135,7 @@ const Auth = () => {
       <div className="w-full max-w-md relative z-10">
         {/* Logo/Header */}
         <Link to="/" className="flex items-center justify-center gap-2 mb-8">
-          <div className="w-10 h-10 rounded-lg gradient-primary glow-primary flex items-center justify-center">
-            <TrendingUp className="w-6 h-6 text-primary-foreground" />
-          </div>
-          <span className="text-2xl font-bold">Opatrocinador</span>
+          <img src="src/assets/logo-escrita-inferior.png" alt="Logo Opatrocinador" height={250} width={250} />
         </Link>
 
         <Tabs defaultValue="login" className="w-full">
