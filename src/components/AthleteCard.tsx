@@ -95,8 +95,8 @@ export const AthleteCard = ({ athlete }: AthleteCardProps) => {
               </p>
             </div>
             <div className={`flex items-center gap-1 ${isPositive ? 'text-green-500' :
-                isNegative ? 'text-red-500' :
-                  'text-muted-foreground'
+              isNegative ? 'text-red-500' :
+                'text-muted-foreground'
               }`}>
               {isPositive ? (
                 <TrendingUp className="w-5 h-5" />
@@ -108,6 +108,7 @@ export const AthleteCard = ({ athlete }: AthleteCardProps) => {
               <span className="font-semibold">
                 {isPositive ? '+' : ''}{realPriceChange.toFixed(2)}%
               </span>
+              <span className="text-[10px] opacity-70 ml-0.5 mt-1 font-normal">24h</span>
             </div>
           </div>
 

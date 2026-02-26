@@ -531,8 +531,8 @@ const AthletePage = () => {
                   <div className="flex items-center justify-between">
                     <CardTitle>Preço Atual</CardTitle>
                     <div className={`flex items-center gap-1 ${realPriceChange > 0 ? 'text-green-500' :
-                        realPriceChange < 0 ? 'text-red-500' :
-                          'text-muted-foreground'
+                      realPriceChange < 0 ? 'text-red-500' :
+                        'text-muted-foreground'
                       }`}>
                       {realPriceChange > 0 ? (
                         <TrendingUp className="w-5 h-5" />
@@ -544,6 +544,7 @@ const AthletePage = () => {
                       <span className="font-semibold">
                         {realPriceChange > 0 ? '+' : ''}{realPriceChange.toFixed(2)}%
                       </span>
+                      <span className="text-xs opacity-70 ml-1 mt-0.5 font-normal">24h</span>
                     </div>
                   </div>
                 </CardHeader>
