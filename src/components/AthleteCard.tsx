@@ -1,16 +1,65 @@
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { TrendingUp, TrendingDown, Trophy } from "lucide-react";
+import { TrendingUp, TrendingDown, ArrowRight, Trophy } from "lucide-react";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardFooter, CardHeader } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { Athlete } from "@/types/athlete";
+import { supabase } from "@/lib/supabase";
 
 interface AthleteCardProps {
   athlete: Athlete;
 }
 
 export const AthleteCard = ({ athlete }: AthleteCardProps) => {
-  const isPositive = athlete.priceChange >= 0;
+  const [realPriceChange, setRealPriceChange] = useState<number>(0);
+
+  useEffect(() => {
+    const fetch24hChange = async () => {
+      if (!athlete?.id || !athlete?.tokenPrice) return;
+
+      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+      try {
+        let { data: pastTx } = await supabase
+          .from('transactions')
+          .select('price')
+          .eq('athlete_id', athlete.id)
+          .lte('created_at', twentyFourHoursAgo)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        let oldPrice = pastTx?.price;
+
+        if (!oldPrice) {
+          const { data: firstTx24h } = await supabase
+            .from('transactions')
+            .select('price')
+            .eq('athlete_id', athlete.id)
+            .gte('created_at', twentyFourHoursAgo)
+            .order('created_at', { ascending: true })
+            .limit(1)
+            .maybeSingle();
+          oldPrice = firstTx24h?.price;
+        }
+
+        if (oldPrice && oldPrice > 0) {
+          const change = ((athlete.tokenPrice - oldPrice) / oldPrice) * 100;
+          setRealPriceChange(change);
+        } else {
+          setRealPriceChange(0);
+        }
+      } catch (error) {
+        console.error("Erro ao calcular variação de 24h para", athlete.name, error);
+      }
+    };
+
+    fetch24hChange();
+  }, [athlete.id, athlete.tokenPrice]);
+
+  const isPositive = realPriceChange > 0;
+  const isNegative = realPriceChange < 0;
 
   return (
     <Link to={`/athlete/${athlete.id}`}>
@@ -45,10 +94,19 @@ export const AthleteCard = ({ athlete }: AthleteCardProps) => {
                 ${athlete.tokenPrice.toFixed(2)}
               </p>
             </div>
-            <div className={`flex items-center gap-1 ${isPositive ? 'text-success' : 'text-danger'}`}>
-              {isPositive ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
+            <div className={`flex items-center gap-1 ${isPositive ? 'text-green-500' :
+                isNegative ? 'text-red-500' :
+                  'text-muted-foreground'
+              }`}>
+              {isPositive ? (
+                <TrendingUp className="w-5 h-5" />
+              ) : isNegative ? (
+                <TrendingDown className="w-5 h-5" />
+              ) : (
+                <ArrowRight className="w-5 h-5" />
+              )}
               <span className="font-semibold">
-                {isPositive ? '+' : ''}{athlete.priceChange.toFixed(1)}%
+                {isPositive ? '+' : ''}{realPriceChange.toFixed(2)}%
               </span>
             </div>
           </div>
