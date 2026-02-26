@@ -6,10 +6,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { mockAthletes } from "@/data/mockAthletes";
-import { TrendingUp, TrendingDown, Trophy, ArrowLeft, Twitter, Instagram } from "lucide-react";
+import { TrendingUp, TrendingDown, ArrowRight, Trophy, ArrowLeft, Twitter, Instagram } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/hooks/useAuth";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 
 const AthletePage = () => {
   const { id } = useParams();
@@ -22,6 +24,128 @@ const AthletePage = () => {
   const [buying, setBuying] = useState(false);
   const [isInWatchlist, setIsInWatchlist] = useState(false);
   const [watchlistLoading, setWatchlistLoading] = useState(false);
+  const [timeframe, setTimeframe] = useState<'1D' | '1M' | '1Y'>('1M');
+  const [chartData, setChartData] = useState<any[]>([]);
+  const [chartEmpty, setChartEmpty] = useState(false);
+  const [loadingChart, setLoadingChart] = useState(false);
+  const [realPriceChange, setRealPriceChange] = useState<number>(0);
+
+  // Calcula a variação real das últimas 24 horas
+  useEffect(() => {
+    const fetch24hChange = async () => {
+      if (!athlete?.id || !athlete?.tokenPrice) return;
+
+      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+      try {
+        // 1. Tenta pegar o último preço negociado ANTES de 24h atrás
+        let { data: pastTx } = await supabase
+          .from('transactions')
+          .select('price')
+          .eq('athlete_id', athlete.id)
+          .lte('created_at', twentyFourHoursAgo)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        let oldPrice = pastTx?.price;
+
+        // 2. Se não houver, pega o PRIMEIRO preço negociado DENTRO das últimas 24h
+        if (!oldPrice) {
+          const { data: firstTx24h } = await supabase
+            .from('transactions')
+            .select('price')
+            .eq('athlete_id', athlete.id)
+            .gte('created_at', twentyFourHoursAgo)
+            .order('created_at', { ascending: true })
+            .limit(1)
+            .maybeSingle();
+          oldPrice = firstTx24h?.price;
+        }
+
+        // 3. Calcula a porcentagem real (ou deixa 0% se não houver nenhuma transação)
+        if (oldPrice) {
+          const change = ((athlete.tokenPrice - oldPrice) / oldPrice) * 100;
+          setRealPriceChange(change);
+        } else {
+          setRealPriceChange(0);
+        }
+      } catch (error) {
+        console.error("Erro ao calcular variação de 24h:", error);
+      }
+    };
+
+    fetch24hChange();
+  }, [athlete?.id, athlete?.tokenPrice]);
+
+  // Lógica para gerar o desenho do gráfico
+  // Busca os dados reais de mercado
+  useEffect(() => {
+    const loadChartData = async () => {
+      if (!athlete?.id) return;
+
+      setLoadingChart(true);
+      try {
+        const now = new Date();
+        let startDate = new Date();
+
+        // Define a data de corte baseada no filtro selecionado
+        if (timeframe === '1D') startDate.setDate(now.getDate() - 1);
+        else if (timeframe === '1M') startDate.setMonth(now.getMonth() - 1);
+        else if (timeframe === '1Y') startDate.setFullYear(now.getFullYear() - 1);
+
+        const { data, error } = await supabase
+          .from('transactions')
+          .select('price, created_at')
+          .eq('athlete_id', athlete.id)
+          .gte('created_at', startDate.toISOString())
+          .order('created_at', { ascending: true });
+
+        if (error) throw error;
+
+        // Se não houver transações no período, mostramos a mensagem
+        if (!data || data.length === 0) {
+          setChartEmpty(true);
+          setChartData([]);
+          return;
+        }
+
+        setChartEmpty(false);
+
+        // Formata as transações reais para o formato que o gráfico entende
+        const formattedData = data.map(tx => {
+          const date = new Date(tx.created_at);
+          let timeLabel = '';
+
+          if (timeframe === '1D') {
+            timeLabel = date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+          } else if (timeframe === '1M') {
+            timeLabel = date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+          } else {
+            timeLabel = date.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
+          }
+
+          return { time: timeLabel, price: Number(tx.price) };
+        });
+
+        // Adiciona o momento "Agora" para a linha conectar até o tempo presente
+        formattedData.push({
+          time: timeframe === '1D' ? now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) :
+            timeframe === '1M' ? now.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) :
+              now.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }),
+          price: athlete.tokenPrice
+        });
+
+        setChartData(formattedData);
+      } catch (error) {
+        console.error('Erro ao carregar dados do gráfico:', error);
+      } finally {
+        setLoadingChart(false);
+      }
+    };
+
+    loadChartData();
+  }, [athlete?.id, timeframe, athlete?.tokenPrice]);
 
   useEffect(() => {
     loadAthlete();
@@ -286,6 +410,74 @@ const AthletePage = () => {
                 </CardContent>
               </Card>
 
+              {/* NOVO: Gráfico de Variação de Preço */}
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle>Histórico de Preço</CardTitle>
+                  <Tabs value={timeframe} onValueChange={(v) => setTimeframe(v as '1D' | '1M' | '1Y')} className="w-[200px]">
+                    <TabsList className="grid w-full grid-cols-3">
+                      <TabsTrigger value="1D">1D</TabsTrigger>
+                      <TabsTrigger value="1M">1M</TabsTrigger>
+                      <TabsTrigger value="1Y">1Y</TabsTrigger>
+                    </TabsList>
+                  </Tabs>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-[300px] w-full mt-4">
+                    {loadingChart ? (
+                      <div className="w-full h-full flex items-center justify-center text-muted-foreground animate-pulse">
+                        Carregando histórico do mercado...
+                      </div>
+                    ) : chartEmpty ? (
+                      <div className="w-full h-full flex flex-col items-center justify-center text-center px-4 border-2 border-dashed border-border rounded-lg bg-muted/20">
+                        <TrendingUp className="w-8 h-8 text-muted-foreground mb-2 opacity-50" />
+                        <p className="text-muted-foreground font-medium">
+                          Este token não possui movimentações neste período.
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Seja o primeiro a negociar {athlete.name}!
+                        </p>
+                      </div>
+                    ) : (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={chartData}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--muted-foreground))" opacity={0.2} />
+                          <XAxis
+                            dataKey="time"
+                            stroke="hsl(var(--muted-foreground))"
+                            fontSize={12}
+                            tickLine={false}
+                            axisLine={false}
+                          />
+                          <YAxis
+                            domain={['auto', 'auto']}
+                            stroke="hsl(var(--muted-foreground))"
+                            fontSize={12}
+                            tickLine={false}
+                            axisLine={false}
+                            tickFormatter={(value) => `R$ ${value.toFixed(2)}`}
+                          />
+                          <RechartsTooltip
+                            contentStyle={{ backgroundColor: 'hsl(var(--background))', borderColor: 'hsl(var(--border))', borderRadius: '8px' }}
+                            itemStyle={{ color: 'hsl(var(--foreground))' }}
+                            formatter={(value: number) => [`R$ ${value.toFixed(2)}`, 'Preço Negociado']}
+                            labelStyle={{ color: 'hsl(var(--muted-foreground))', marginBottom: '4px' }}
+                          />
+                          <Line
+                            type="stepAfter"
+                            dataKey="price"
+                            stroke="hsl(var(--primary))"
+                            strokeWidth={2}
+                            dot={{ r: 3, fill: 'hsl(var(--primary))' }}
+                            activeDot={{ r: 6, fill: 'hsl(var(--primary))' }}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
               {/* Stats */}
               <Card>
                 <CardHeader>
@@ -338,10 +530,19 @@ const AthletePage = () => {
                 <CardHeader>
                   <div className="flex items-center justify-between">
                     <CardTitle>Preço Atual</CardTitle>
-                    <div className={`flex items-center gap-1 ${isPositive ? 'text-success' : 'text-danger'}`}>
-                      {isPositive ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
+                    <div className={`flex items-center gap-1 ${realPriceChange > 0 ? 'text-green-500' :
+                        realPriceChange < 0 ? 'text-red-500' :
+                          'text-muted-foreground'
+                      }`}>
+                      {realPriceChange > 0 ? (
+                        <TrendingUp className="w-5 h-5" />
+                      ) : realPriceChange < 0 ? (
+                        <TrendingDown className="w-5 h-5" />
+                      ) : (
+                        <ArrowRight className="w-5 h-5" />
+                      )}
                       <span className="font-semibold">
-                        {isPositive ? '+' : ''}{athlete.priceChange.toFixed(1)}%
+                        {realPriceChange > 0 ? '+' : ''}{realPriceChange.toFixed(2)}%
                       </span>
                     </div>
                   </div>

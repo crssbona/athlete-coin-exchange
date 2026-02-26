@@ -30,7 +30,7 @@ export const Hero = () => {
 
           {/* Main heading */}
           <h1 className="text-5xl md:text-7xl font-bold leading-tight">
-            A Bolsa de Valores{' '}
+            A arena de Tokens{' '}
             <span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent">
               <br /> dos atletas
             </span>

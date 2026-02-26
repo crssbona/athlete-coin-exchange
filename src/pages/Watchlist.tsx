@@ -20,6 +20,7 @@ export default function Watchlist() {
   const { user, loading } = useAuth();
   const navigate = useNavigate();
   const [watchlist, setWatchlist] = useState<WatchlistItem[]>([]);
+  const [athletesData, setAthletesData] = useState<Map<string, any>>(new Map()); // NOVO ESTADO AQUI
   const [loadingWatchlist, setLoadingWatchlist] = useState(true);
 
   useEffect(() => {
@@ -36,14 +37,52 @@ export default function Watchlist() {
 
   const loadWatchlist = async () => {
     try {
-      const { data, error } = await supabase
+      // 1. Pega os IDs que o usuário está seguindo
+      const { data: watchlistData, error } = await supabase
         .from('user_watchlist')
         .select('*')
         .eq('user_id', user?.id)
         .order('added_at', { ascending: false });
 
       if (error) throw error;
-      setWatchlist(data || []);
+      setWatchlist(watchlistData || []);
+
+      // 2. Busca os detalhes reais desses atletas no banco de dados
+      if (watchlistData && watchlistData.length > 0) {
+        const athleteIds = watchlistData.map(item => item.athlete_id);
+        const dataMap = new Map();
+
+        const { data: athletes } = await supabase
+          .from('athlete_tokens')
+          .select('*')
+          .in('athlete_id', athleteIds);
+
+        if (athletes) {
+          athletes.forEach(athlete => {
+            // Mantém a variação do mock se existir, senão fica 0%
+            const mock = mockAthletes.find(a => a.id === athlete.athlete_id);
+
+            dataMap.set(athlete.athlete_id, {
+              id: athlete.athlete_id,
+              name: athlete.athlete_name,
+              avatar: athlete.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${athlete.athlete_name}`,
+              tokenPrice: athlete.price_per_token,
+              sport: athlete.sport,
+              priceChange: mock ? mock.priceChange : 0
+            });
+          });
+        }
+
+        // 3. Fallback: Se algum atleta estiver apenas no mockAthletes
+        athleteIds.forEach(id => {
+          if (!dataMap.has(id)) {
+            const mock = mockAthletes.find(a => a.id === id);
+            if (mock) dataMap.set(id, mock);
+          }
+        });
+
+        setAthletesData(dataMap);
+      }
     } catch (error) {
       console.error('Error loading watchlist:', error);
       toast.error('Erro ao carregar watchlist');
@@ -60,7 +99,7 @@ export default function Watchlist() {
         .eq('id', itemId);
 
       if (error) throw error;
-      
+
       setWatchlist(watchlist.filter(item => item.id !== itemId));
       toast.success('Removido da watchlist');
     } catch (error) {
@@ -70,7 +109,7 @@ export default function Watchlist() {
   };
 
   const getAthleteInfo = (athleteId: string) => {
-    return mockAthletes.find(a => a.id === athleteId);
+    return athletesData.get(athleteId);
   };
 
   if (loading || loadingWatchlist) {
@@ -144,7 +183,7 @@ export default function Watchlist() {
                             R$ {athlete.tokenPrice.toFixed(2)}
                           </span>
                         </div>
-                        
+
                         <div className="flex items-center justify-between">
                           <span className="text-sm text-muted-foreground">Variação 24h</span>
                           <div className={`flex items-center gap-1 ${isPositive ? 'text-success' : 'text-danger'}`}>

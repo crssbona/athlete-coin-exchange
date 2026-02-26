@@ -45,6 +45,7 @@ interface TransactionRecord {
   quantity: number;
   price: number;
   created_at: string;
+  original_quantity?: number;
 }
 
 export function SponsorPanel({ userId }: SponsorPanelProps) {
@@ -577,6 +578,7 @@ export function SponsorPanel({ userId }: SponsorPanelProps) {
                   day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
                 });
                 const isBuy = tx.type === 'buy';
+                const isPartial = tx.original_quantity && tx.quantity < tx.original_quantity;
 
                 return (
                   <div
@@ -596,9 +598,16 @@ export function SponsorPanel({ userId }: SponsorPanelProps) {
                             {isBuy ? 'COMPRA' : 'VENDA'}
                           </Badge>
                         </div>
-                        <p className="text-sm text-muted-foreground">
-                          {tx.quantity} tokens • R$ {tx.price.toFixed(2)} / token
-                        </p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <p className="text-sm text-muted-foreground">
+                            {tx.quantity} tokens • R$ {tx.price.toFixed(2)} / token
+                          </p>
+                          {isPartial && (
+                            <span className="text-[10px] font-medium bg-amber-500/20 text-amber-600 px-2 py-0.5 rounded-full">
+                              Parcial ({tx.quantity} de {tx.original_quantity})
+                            </span>
+                          )}
+                        </div>
                         <p className="text-xs text-muted-foreground mt-0.5">
                           Data: {txDate}
                         </p>
