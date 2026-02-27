@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { TrendingUp, TrendingDown, Clock, ArrowUpRight } from "lucide-react";
 import { mockAthletes } from "@/data/mockAthletes";
 import { toast } from "sonner";
+import { Link } from "react-router-dom";
 
 interface UserToken {
   id: string;
@@ -396,11 +397,13 @@ export function SponsorPanel({ userId }: SponsorPanelProps) {
                   >
                     <div className="flex items-center gap-4">
                       {athlete?.avatar && (
-                        <img
-                          src={athlete.avatar}
-                          alt={athlete?.name || 'Atleta'}
-                          className="w-12 h-12 rounded-full object-cover"
-                        />
+                        <Link to={`/athlete/${order.athlete_id}`}>
+                          <img
+                            src={athlete.avatar}
+                            alt={athlete?.name || 'Atleta'}
+                            className="w-12 h-12 rounded-full object-cover cursor-pointer hover:ring-2 hover:ring-primary transition-all"
+                          />
+                        </Link>
                       )}
                       <div>
                         <h4 className="font-semibold">{athlete?.name || 'Atleta'}</h4>
@@ -456,11 +459,13 @@ export function SponsorPanel({ userId }: SponsorPanelProps) {
                   >
                     <div className="flex items-center gap-4">
                       {athlete?.avatar && (
-                        <img
-                          src={athlete.avatar}
-                          alt={athlete?.name || 'Atleta'}
-                          className="w-12 h-12 rounded-full object-cover"
-                        />
+                        <Link to={`/athlete/${sale.athlete_id}`}>
+                          <img
+                            src={athlete.avatar}
+                            alt={athlete?.name || 'Atleta'}
+                            className="w-12 h-12 rounded-full object-cover cursor-pointer hover:ring-2 hover:ring-primary transition-all"
+                          />
+                        </Link>
                       )}
                       <div>
                         <h4 className="font-semibold">{athlete?.name || 'Atleta'}</h4>
@@ -514,11 +519,13 @@ export function SponsorPanel({ userId }: SponsorPanelProps) {
                     className="flex items-center justify-between p-4 border rounded-lg bg-card hover:bg-accent/50 transition-colors"
                   >
                     <div className="flex items-center gap-4">
-                      <img
-                        src={athlete.avatar}
-                        alt={athlete.name}
-                        className="w-12 h-12 rounded-full object-cover"
-                      />
+                      <Link to={`/athlete/${item.athlete_id}`}>
+                        <img
+                          src={athlete.avatar}
+                          alt={athlete.name}
+                          className="w-12 h-12 rounded-full object-cover cursor-pointer hover:ring-2 hover:ring-primary transition-all"
+                        />
+                      </Link>
                       <div>
                         <h4 className="font-semibold">{athlete.name}</h4>
                         <p className="text-sm text-muted-foreground">
@@ -586,11 +593,13 @@ export function SponsorPanel({ userId }: SponsorPanelProps) {
                     className="flex items-center justify-between p-4 border rounded-lg bg-card hover:bg-accent/50 transition-colors"
                   >
                     <div className="flex items-center gap-4">
-                      <img
-                        src={athlete.avatar}
-                        alt={athlete.name}
-                        className="w-12 h-12 rounded-full object-cover"
-                      />
+                      <Link to={`/athlete/${tx.athlete_id}`}>
+                        <img
+                          src={athlete.avatar}
+                          alt={athlete.name}
+                          className="w-12 h-12 rounded-full object-cover cursor-pointer hover:ring-2 hover:ring-primary transition-all"
+                        />
+                      </Link>
                       <div>
                         <div className="flex items-center gap-2 mb-1">
                           <h4 className="font-semibold">{athlete.name}</h4>
