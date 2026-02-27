@@ -12,7 +12,6 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { TrendingUp, TrendingDown, Users, Coins } from "lucide-react";
 import { toast } from "sonner";
-import { SponsorPanel } from "@/components/profile/SponsorPanel";
 import { SponsoredPanel } from "@/components/profile/SponsoredPanel";
 
 type UserRole = 'sponsor' | 'sponsored';
@@ -195,7 +194,18 @@ export default function Profile() {
 
           {/* Content based on active role */}
           {activeRole === 'sponsor' ? (
-            <SponsorPanel userId={user?.id || ''} />
+            <div className="text-center py-16 px-4 border-2 border-dashed border-border rounded-xl bg-card/50">
+              <Users className="w-12 h-12 text-muted-foreground mx-auto mb-4 opacity-50" />
+              <h3 className="text-2xl font-bold mb-2">Modo Patrocinador</h3>
+              <p className="text-muted-foreground max-w-md mx-auto mb-8">
+                O gerenciamento dos seus investimentos e a sua carteira de tokens foram movidos para a página "Minha Carteira".
+                <br /><br />
+                Para gerenciar o seu perfil de Atleta, ative o Modo Patrocinado no botão acima.
+              </p>
+              <Button size="lg" onClick={() => navigate('/wallet')}>
+                Ir para Minha Carteira
+              </Button>
+            </div>
           ) : (
             <SponsoredPanel userId={user?.id || ''} profile={profile} />
           )}

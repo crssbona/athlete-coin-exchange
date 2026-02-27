@@ -8,8 +8,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Wallet as WalletIcon, ArrowDownCircle, ArrowUpCircle, Landmark, History } from "lucide-react";
+import { Wallet as WalletIcon, ArrowDownCircle, ArrowUpCircle, Landmark, History, TrendingUp } from "lucide-react";
 import { toast } from "sonner";
+import { SponsorPanel } from "@/components/profile/SponsorPanel";
 
 export default function WalletPage() {
     const { user, loading } = useAuth();
@@ -266,6 +267,22 @@ export default function WalletPage() {
                         </div>
 
                     </div>
+                    <div className="grid md:grid-cols-3 gap-6">
+                        {/* ... (todo o código da carteira que já fizemos fica aqui intacto) ... */}
+                    </div>
+
+                    {/* NOVO: Seção de Investimentos (SponsorPanel) */}
+                    <div className="mt-16 mb-6">
+                        <h2 className="text-3xl font-bold flex items-center gap-3 mb-2">
+                            <TrendingUp className="w-8 h-8 text-primary" />
+                            Meus Investimentos
+                        </h2>
+                        <p className="text-muted-foreground">
+                            Acompanhe seu rendimento, sua carteira de tokens e o histórico de negociações.
+                        </p>
+                    </div>
+
+                    {user && <SponsorPanel userId={user.id} />}
                 </div>
             </main>
         </div>
