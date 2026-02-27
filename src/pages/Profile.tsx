@@ -55,27 +55,27 @@ export default function Profile() {
         .maybeSingle();
 
       if (error) throw error;
-      
+
       // Se não existe perfil, cria um básico
       if (!data) {
         const newProfile = {
           id: user?.id,
-          name: user?.user_metadata?.first_name 
+          name: user?.user_metadata?.first_name
             ? `${user.user_metadata.first_name} ${user.user_metadata.last_name || ''}`.trim()
             : user?.email?.split('@')[0] || 'Usuário',
           phone: user?.user_metadata?.phone,
           document: user?.user_metadata?.document_number,
           active_role: 'sponsor' as const
         };
-        
+
         const { error: insertError } = await supabase
           .from('profiles')
           .insert(newProfile);
-          
+
         if (insertError) {
           console.error('Error creating profile:', insertError);
         }
-        
+
         setProfile(newProfile);
         setActiveRole('sponsor');
       } else {

@@ -35,7 +35,11 @@ export const Navbar = () => {
     <nav className="fixed top-0 left-0 right-0 z-50 border-b border-border bg-background/80 backdrop-blur-lg">
       <div className="container mx-auto px-4 h-16 flex items-center justify-between">
         <Link to="/" className="flex items-center gap-2">
-          <img src="src/assets/logo-escrita-lateral.png" alt="Logo Opatrocinador" height={250} width={250} />
+          <img
+            src="src/assets/logo-escrita-lateral.png"
+            alt="Logo Opatrocinador"
+            className="w-[160px] md:w-[250px] h-auto object-contain"
+          />
         </Link>
 
         <div className="hidden md:flex items-center gap-8">
@@ -48,9 +52,11 @@ export const Navbar = () => {
         </div>
 
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon">
-            <Wallet className="w-5 h-5" />
-          </Button>
+          <Link to="/wallet">
+            <Button variant="ghost" size="icon" className="hover:text-primary transition-colors">
+              <Wallet className="w-5 h-5" />
+            </Button>
+          </Link>
 
           {user ? (
             <DropdownMenu>
