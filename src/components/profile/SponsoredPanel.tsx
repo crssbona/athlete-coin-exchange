@@ -6,8 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Coins, Plus, DollarSign } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Coins, Plus, DollarSign, Pencil } from "lucide-react";
 import { toast } from "sonner";
 
 interface AthleteToken {
@@ -37,7 +37,8 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
   const [loading, setLoading] = useState(true);
   const [newTokens, setNewTokens] = useState(100);
   const [newPrice, setNewPrice] = useState(10);
-  
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+
   // Profile fields
   const [athleteName, setAthleteName] = useState("");
   const [sport, setSport] = useState("");
@@ -62,7 +63,21 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
         .maybeSingle();
 
       if (error) throw error;
+
       setAthleteToken(data);
+
+      // Se o atleta já existe, preenchemos os estados para o formulário de edição
+      if (data) {
+        setAthleteName(data.athlete_name || "");
+        setSport(data.sport || "");
+        setDescription(data.description || "");
+        setAvatarUrl(data.avatar_url || "");
+        setAchievements(data.achievements ? data.achievements.join('\n') : "");
+        setTwitter(data.social_twitter || "");
+        setInstagram(data.social_instagram || "");
+        setTwitch(data.social_twitch || "");
+        setYoutube(data.social_youtube || "");
+      }
     } catch (error) {
       console.error('Error loading athlete tokens:', error);
     } finally {
@@ -79,14 +94,10 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
 
       const clampedTokens = Math.min(Math.max(Math.floor(newTokens), 1), 100);
 
-      if (clampedTokens !== newTokens) {
-        setNewTokens(clampedTokens);
-      }
-
       const athleteId = `athlete-${userId.substring(0, 8)}`;
       const achievementsArray = achievements.split('\n').filter(a => a.trim());
       const marketCap = clampedTokens * newPrice;
-      
+
       const { error } = await supabase
         .from('athlete_tokens')
         .insert({
@@ -110,7 +121,7 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
         });
 
       if (error) throw error;
-      
+
       toast.success('Tokens criados com sucesso! Você já aparece no marketplace!');
       loadAthleteTokens();
     } catch (error: any) {
@@ -119,17 +130,66 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
     }
   };
 
+  const updateProfile = async () => {
+    try {
+      if (!athleteName || !sport || !description) {
+        toast.error('Preencha todos os campos obrigatórios');
+        return;
+      }
+
+      const achievementsArray = achievements.split('\n').filter(a => a.trim());
+
+      const { error } = await supabase
+        .from('athlete_tokens')
+        .update({
+          athlete_name: athleteName,
+          sport: sport,
+          description: description,
+          avatar_url: avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${athleteName}`,
+          achievements: achievementsArray,
+          social_twitter: twitter || null,
+          social_instagram: instagram || null,
+          social_twitch: twitch || null,
+          social_youtube: youtube || null,
+        })
+        .eq('id', athleteToken?.id);
+
+      if (error) throw error;
+
+      toast.success('Perfil atualizado com sucesso!');
+      setIsEditDialogOpen(false);
+      loadAthleteTokens();
+    } catch (error: any) {
+      console.error('Error updating profile:', error);
+      toast.error(error.message || 'Erro ao atualizar perfil');
+    }
+  };
+
   const generateMoreTokens = async () => {
     if (!athleteToken) return;
 
     try {
-      const clamped = Math.min(Math.max(Math.floor(newTokens), 1), 100);
       const remaining = 100 - athleteToken.total_tokens;
+
       if (remaining <= 0) {
         toast.error('Você já atingiu o limite de 100 tokens.');
         return;
       }
-      const toGenerate = Math.min(clamped, remaining);
+
+      // Verificação RIGOROSA: Trava a operação se o usuário pedir mais do que pode
+      if (newTokens > remaining) {
+        toast.error(`Você pode gerar no máximo mais ${remaining} tokens.`);
+        setNewTokens(remaining); // Ajusta o campo para o máximo permitido
+        return; // <-- O "return" cancela a operação aqui e não gera nada!
+      }
+
+      if (newTokens <= 0) {
+        toast.error('A quantidade deve ser maior que zero.');
+        setNewTokens(1);
+        return;
+      }
+
+      const toGenerate = Math.floor(newTokens);
       const newTotal = athleteToken.total_tokens + toGenerate;
 
       const { error } = await supabase
@@ -141,8 +201,9 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
         .eq('id', athleteToken.id);
 
       if (error) throw error;
-      
-      toast.success(`${newTokens} novos tokens gerados!`);
+
+      toast.success(`${toGenerate} novos tokens gerados!`);
+      setNewTokens(1); // Limpa o campo para evitar cliques duplicados
       loadAthleteTokens();
     } catch (error: any) {
       console.error('Error generating tokens:', error);
@@ -150,29 +211,13 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
     }
   };
 
-  const updatePrice = async () => {
-    if (!athleteToken) return;
 
-    try {
-      const { error } = await supabase
-        .from('athlete_tokens')
-        .update({ price_per_token: newPrice })
-        .eq('id', athleteToken.id);
-
-      if (error) throw error;
-      
-      toast.success('Preço atualizado!');
-      loadAthleteTokens();
-    } catch (error: any) {
-      console.error('Error updating price:', error);
-      toast.error(error.message || 'Erro ao atualizar preço');
-    }
-  };
 
   if (loading) {
     return <div>Carregando...</div>;
   }
 
+  // TELA DE CRIAÇÃO DO ATLETA
   if (!athleteToken) {
     return (
       <Card>
@@ -313,12 +358,26 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
     );
   }
 
+  // TELA DE GERENCIAMENTO (ATLETA JÁ EXISTENTE)
   const soldTokens = athleteToken.total_tokens - athleteToken.available_tokens;
   const soldPercentage = (soldTokens / athleteToken.total_tokens) * 100;
   const revenue = soldTokens * athleteToken.price_per_token;
 
   return (
     <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-4 rounded-lg border shadow-sm">
+        <div>
+          <h2 className="text-2xl font-bold flex items-center gap-2">
+            Visão Geral do seu Mercado
+          </h2>
+          <p className="text-muted-foreground">Aqui você acompanha o desempenho dos seus tokens.</p>
+        </div>
+        <Button onClick={() => setIsEditDialogOpen(true)} variant="outline">
+          <Pencil className="w-4 h-4 mr-2" />
+          Editar Perfil
+        </Button>
+      </div>
+
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
@@ -355,56 +414,138 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
       </div>
 
       {/* Management */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <Card>
-          <CardHeader>
-            <CardTitle>Gerar Mais Tokens</CardTitle>
-            <CardDescription>Crie tokens adicionais para comercialização</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <Label htmlFor="new-tokens">Quantidade de Novos Tokens</Label>
-              <Input
-                id="new-tokens"
-                type="number"
-                value={newTokens}
-                onChange={(e) => setNewTokens(Number(e.target.value))}
-                min="1"
-                max={100 - athleteToken.total_tokens}
-                step="1"
-              />
-            </div>
-            <Button onClick={generateMoreTokens} className="w-full">
-              <Plus className="w-4 h-4 mr-2" />
-              Gerar Tokens
-            </Button>
-          </CardContent>
-        </Card>
+      {athleteToken.total_tokens < 100 && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Gerar Mais Tokens</CardTitle>
+              <CardDescription>
+                Você ainda pode gerar até {100 - athleteToken.total_tokens} tokens.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="new-tokens">Quantidade de Novos Tokens</Label>
+                <Input
+                  id="new-tokens"
+                  type="number"
+                  value={newTokens}
+                  onChange={(e) => setNewTokens(Number(e.target.value))}
+                  min="1"
+                  max={100 - athleteToken.total_tokens}
+                  step="1"
+                />
+              </div>
+              <Button onClick={generateMoreTokens} className="w-full">
+                <Plus className="w-4 h-4 mr-2" />
+                Gerar Tokens
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Atualizar Preço</CardTitle>
-            <CardDescription>Ajuste o preço por token</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
+      {/* Modal de Edição de Perfil */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Editar Perfil Público</DialogTitle>
+            <DialogDescription>
+              Atualize as informações que os patrocinadores verão no seu marketplace.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="editAthleteName">Nome do Atleta *</Label>
+                <Input
+                  id="editAthleteName"
+                  value={athleteName}
+                  onChange={(e) => setAthleteName(e.target.value)}
+                />
+              </div>
+              <div>
+                <Label htmlFor="editSport">Modalidade *</Label>
+                <Select value={sport} onValueChange={setSport}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="E-Sports">E-Sports</SelectItem>
+                    <SelectItem value="Futebol">Futebol</SelectItem>
+                    <SelectItem value="MMA">MMA</SelectItem>
+                    <SelectItem value="Atletismo">Atletismo</SelectItem>
+                    <SelectItem value="Basquete">Basquete</SelectItem>
+                    <SelectItem value="Vôlei">Vôlei</SelectItem>
+                    <SelectItem value="Natação">Natação</SelectItem>
+                    <SelectItem value="Outros">Outros</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
             <div>
-              <Label htmlFor="new-price">Preço Atual: R$ {athleteToken.price_per_token.toFixed(2)}</Label>
-              <Input
-                id="new-price"
-                type="number"
-                value={newPrice}
-                onChange={(e) => setNewPrice(Number(e.target.value))}
-                min="0.01"
-                step="0.01"
-                placeholder="Novo preço"
+              <Label htmlFor="editDescription">Descrição *</Label>
+              <Textarea
+                id="editDescription"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                rows={3}
               />
             </div>
-            <Button onClick={updatePrice} className="w-full" variant="outline">
-              Atualizar Preço
+
+            <div>
+              <Label htmlFor="editAvatarUrl">URL da Foto</Label>
+              <Input
+                id="editAvatarUrl"
+                value={avatarUrl}
+                onChange={(e) => setAvatarUrl(e.target.value)}
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="editAchievements">Conquistas (uma por linha)</Label>
+              <Textarea
+                id="editAchievements"
+                value={achievements}
+                onChange={(e) => setAchievements(e.target.value)}
+                rows={3}
+              />
+            </div>
+
+            <div className="border-t pt-4">
+              <h3 className="font-semibold mb-3">Redes Sociais</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <Input
+                  placeholder="Twitter/X"
+                  value={twitter}
+                  onChange={(e) => setTwitter(e.target.value)}
+                />
+                <Input
+                  placeholder="Instagram"
+                  value={instagram}
+                  onChange={(e) => setInstagram(e.target.value)}
+                />
+                <Input
+                  placeholder="Twitch"
+                  value={twitch}
+                  onChange={(e) => setTwitch(e.target.value)}
+                />
+                <Input
+                  placeholder="YouTube"
+                  value={youtube}
+                  onChange={(e) => setYoutube(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <Button onClick={updateProfile} className="w-full mt-4">
+              Salvar Alterações
             </Button>
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
