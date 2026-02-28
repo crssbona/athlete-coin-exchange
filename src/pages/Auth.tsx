@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TrendingUp } from "lucide-react";
@@ -12,6 +13,7 @@ import { supabase } from "@/lib/supabase";
 
 const Auth = () => {
   const [isLoading, setIsLoading] = useState(false);
+  const [keepConnected, setKeepConnected] = useState(true);
   const navigate = useNavigate();
   const { user, signIn, signUp } = useAuth();
 
@@ -43,6 +45,17 @@ const Auth = () => {
         toast.error("Erro ao fazer login. Tente novamente.");
       }
       return;
+    }
+
+    // LÓGICA DE MANTER CONECTADO
+    if (!keepConnected) {
+      // Se não quiser manter, criamos uma flag local e um cookie de sessão temporário
+      localStorage.setItem('temp_session_flag', 'true');
+      document.cookie = "session_active=true; path=/;";
+    } else {
+      // Se quiser manter (padrão), limpamos as flags
+      localStorage.removeItem('temp_session_flag');
+      document.cookie = "session_active=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
     }
 
     toast.success("Login realizado com sucesso!");
@@ -177,6 +190,20 @@ const Auth = () => {
                       required
                       disabled={isLoading}
                     />
+                  </div>
+
+                  <div className="flex items-center space-x-2 py-2">
+                    <Checkbox
+                      id="keep-connected"
+                      checked={keepConnected}
+                      onCheckedChange={(checked) => setKeepConnected(checked as boolean)}
+                    />
+                    <label
+                      htmlFor="keep-connected"
+                      className="text-sm font-medium leading-none cursor-pointer"
+                    >
+                      Manter conectado
+                    </label>
                   </div>
 
                   <Button

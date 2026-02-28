@@ -8,28 +8,46 @@ export const useAuth = () => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Set up auth state listener FIRST
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        setLoading(false);
-      }
-    );
+    let subscription: any;
 
-    // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    const initializeAuth = async () => {
+      // 1. Verifica se é uma sessão temporária (Manter conectado = false)
+      const isTemp = localStorage.getItem('temp_session_flag') === 'true';
+      const hasCookie = document.cookie.includes('session_active=true');
+
+      if (isTemp && !hasCookie) {
+        // Se era temporária e o cookie de sessão sumiu (usuário fechou o navegador), fazemos logout.
+        await supabase.auth.signOut();
+        localStorage.removeItem('temp_session_flag');
+      }
+
+      // 2. Registra o listener para mudanças de estado da conta
+      const { data } = supabase.auth.onAuthStateChange(
+        (event, session) => {
+          setSession(session);
+          setUser(session?.user ?? null);
+          setLoading(false);
+        }
+      );
+      subscription = data.subscription;
+
+      // 3. Puxa a sessão atual (já ajustada pela verificação do passo 1)
+      const { data: { session } } = await supabase.auth.getSession();
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
-    });
+    };
 
-    return () => subscription.unsubscribe();
+    initializeAuth();
+
+    return () => {
+      if (subscription) subscription.unsubscribe();
+    };
   }, []);
 
   const signUp = async (email: string, password: string, metadata: any) => {
     const redirectUrl = `${window.location.origin}/`;
-    
+
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
