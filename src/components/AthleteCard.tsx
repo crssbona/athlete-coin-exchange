@@ -1,11 +1,13 @@
 import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { TrendingUp, TrendingDown, ArrowRight, Trophy } from "lucide-react";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardFooter, CardHeader } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { Athlete } from "@/types/athlete";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/hooks/useAuth";
+import { toast } from "sonner";
 
 interface AthleteCardProps {
   athlete: Athlete;
@@ -13,6 +15,27 @@ interface AthleteCardProps {
 
 export const AthleteCard = ({ athlete }: AthleteCardProps) => {
   const [realPriceChange, setRealPriceChange] = useState<number>(0);
+  const [realVolume24h, setRealVolume24h] = useState<number>(0);
+
+  // NOVO: Hooks de Auth e Navegação
+  const { user } = useAuth();
+  const navigate = useNavigate();
+
+  // NOVO: Função que verifica se o usuário está logado ao clicar em Comprar
+  const handleBuyClick = (e: React.MouseEvent) => {
+    if (!user) {
+      e.preventDefault(); // Impede o Link de levar para a página do atleta
+      toast.info("Faça login ou crie uma conta para começar a investir!");
+      navigate("/auth");
+    }
+  };
+
+  const formatMarketValue = (value: number) => {
+    if (!value) return "R$ 0,00";
+    if (value >= 1000000) return `R$ ${(value / 1000000).toFixed(1).replace('.0', '')}M`;
+    if (value >= 1000) return `R$ ${(value / 1000).toFixed(1).replace('.0', '')}mil`;
+    return `R$ ${value.toFixed(2)}`;
+  };
 
   useEffect(() => {
     const fetch24hChange = async () => {
@@ -49,6 +72,18 @@ export const AthleteCard = ({ athlete }: AthleteCardProps) => {
           setRealPriceChange(change);
         } else {
           setRealPriceChange(0);
+        }
+
+        // NOVO: Calcula o volume 24h
+        const { data: volumeTxs } = await supabase
+          .from('transactions')
+          .select('quantity, price')
+          .eq('athlete_id', athlete.id)
+          .gte('created_at', twentyFourHoursAgo);
+
+        if (volumeTxs) {
+          const totalVolume = volumeTxs.reduce((acc, tx) => acc + (tx.quantity * tx.price), 0);
+          setRealVolume24h(totalVolume);
         }
       } catch (error) {
         console.error("Erro ao calcular variação de 24h para", athlete.name, error);
@@ -91,7 +126,7 @@ export const AthleteCard = ({ athlete }: AthleteCardProps) => {
             <div>
               <p className="text-xs text-muted-foreground">Preço do Token</p>
               <p className="text-2xl font-bold">
-                ${athlete.tokenPrice.toFixed(2)}
+                R$ {athlete.tokenPrice.toFixed(2)}
               </p>
             </div>
             <div className={`flex items-center gap-1 ${isPositive ? 'text-green-500' :
@@ -119,13 +154,18 @@ export const AthleteCard = ({ athlete }: AthleteCardProps) => {
             </div>
             <div>
               <p className="text-muted-foreground">Vol. 24h</p>
-              <p className="font-semibold">${(athlete.volume24h / 1000).toFixed(0)}k</p>
+              <p className="font-semibold">{formatMarketValue(realVolume24h)}</p>
             </div>
           </div>
         </CardContent>
 
         <CardFooter className="p-4 pt-0 grid grid-cols-2 gap-2">
-          <Button variant="buy" size="sm" className="w-full">
+          <Button
+            variant="buy"
+            size="sm"
+            className="w-full"
+            onClick={handleBuyClick}
+          >
             Comprar
           </Button>
           <Button variant="outline" size="sm" className="w-full">

@@ -29,6 +29,7 @@ const AthletePage = () => {
   const [chartEmpty, setChartEmpty] = useState(false);
   const [loadingChart, setLoadingChart] = useState(false);
   const [realPriceChange, setRealPriceChange] = useState<number>(0);
+  const [realVolume24h, setRealVolume24h] = useState<number>(0);
 
   // Calcula a variação real das últimas 24 horas
   useEffect(() => {
@@ -69,6 +70,18 @@ const AthletePage = () => {
           setRealPriceChange(change);
         } else {
           setRealPriceChange(0);
+        }
+
+        // NOVO: Calcula o volume 24h real
+        const { data: volumeTxs } = await supabase
+          .from('transactions')
+          .select('quantity, price')
+          .eq('athlete_id', athlete.id)
+          .gte('created_at', twentyFourHoursAgo);
+
+        if (volumeTxs) {
+          const totalVolume = volumeTxs.reduce((acc, tx) => acc + (tx.quantity * tx.price), 0);
+          setRealVolume24h(totalVolume);
         }
       } catch (error) {
         console.error("Erro ao calcular variação de 24h:", error);
@@ -162,6 +175,17 @@ const AthletePage = () => {
       setLimitPrice(athlete.tokenPrice.toFixed(2));
     }
   }, [athlete?.tokenPrice]);
+
+  const formatMarketValue = (value: number) => {
+    if (!value) return "R$ 0,00";
+    if (value >= 1000000) {
+      return `R$ ${(value / 1000000).toFixed(1).replace('.0', '')}M`;
+    }
+    if (value >= 1000) {
+      return `R$ ${(value / 1000).toFixed(1).replace('.0', '')}mil`;
+    }
+    return `R$ ${value.toFixed(2)}`;
+  };
 
   const loadAthlete = async () => {
     try {
@@ -460,7 +484,7 @@ const AthletePage = () => {
                           <RechartsTooltip
                             contentStyle={{ backgroundColor: 'hsl(var(--background))', borderColor: 'hsl(var(--border))', borderRadius: '8px' }}
                             itemStyle={{ color: 'hsl(var(--foreground))' }}
-                            formatter={(value: number) => [`R$ ${value.toFixed(2)}`, 'Preço Negociado']}
+                            formatter={(value: number) => [`R$ ${value.toFixed(2)}`, 'Valor do Token']}
                             labelStyle={{ color: 'hsl(var(--muted-foreground))', marginBottom: '4px' }}
                           />
                           <Line
@@ -487,11 +511,11 @@ const AthletePage = () => {
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                     <div>
                       <p className="text-sm text-muted-foreground mb-1">Market Cap</p>
-                      <p className="text-2xl font-bold">${(athlete.marketCap / 1000).toFixed(0)}k</p>
+                      <p className="text-2xl font-bold">{formatMarketValue(athlete.marketCap)}</p>
                     </div>
                     <div>
                       <p className="text-sm text-muted-foreground mb-1">Volume 24h</p>
-                      <p className="text-2xl font-bold">${(athlete.volume24h / 1000).toFixed(0)}k</p>
+                      <p className="text-2xl font-bold">{formatMarketValue(realVolume24h)}</p>
                     </div>
                     <div>
                       <p className="text-sm text-muted-foreground mb-1">Total Tokens</p>
@@ -551,7 +575,7 @@ const AthletePage = () => {
                 <CardContent className="space-y-6">
                   <div>
                     <p className="text-4xl font-bold mb-1">
-                      ${athlete.tokenPrice.toFixed(2)}
+                      R${athlete.tokenPrice.toFixed(2)}
                     </p>
                     <p className="text-sm text-muted-foreground">por token</p>
                   </div>

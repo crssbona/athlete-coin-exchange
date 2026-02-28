@@ -16,6 +16,36 @@ const Marketplace = () => {
 
   useEffect(() => {
     loadAthletes();
+
+    // Cria um "Ouvinte" (Canal) para a tabela athlete_tokens
+    const athletesSubscription = supabase
+      .channel('mercado_ao_vivo')
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'athlete_tokens' },
+        (payload) => {
+          // Quando o banco avisar que teve UPDATE, nós atualizamos apenas o atleta que mudou no React!
+          setAthletes(currentAthletes =>
+            currentAthletes.map(athlete => {
+              if (athlete.id === payload.new.athlete_id) {
+                return {
+                  ...athlete,
+                  tokenPrice: payload.new.price_per_token,
+                  availableTokens: payload.new.available_tokens,
+                  marketCap: payload.new.market_cap
+                };
+              }
+              return athlete;
+            })
+          );
+        }
+      )
+      .subscribe();
+
+    // Quando o usuário sair da página, nós desligamos o ouvinte para não gastar memória
+    return () => {
+      supabase.removeChannel(athletesSubscription);
+    };
   }, []);
 
   const loadAthletes = async () => {

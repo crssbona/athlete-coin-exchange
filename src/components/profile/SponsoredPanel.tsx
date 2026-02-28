@@ -192,11 +192,15 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
       const toGenerate = Math.floor(newTokens);
       const newTotal = athleteToken.total_tokens + toGenerate;
 
+      // NOVO: Calcula o novo Market Cap do atleta após gerar as moedas
+      const newMarketCap = newTotal * athleteToken.price_per_token;
+
       const { error } = await supabase
         .from('athlete_tokens')
         .update({
           total_tokens: newTotal,
-          available_tokens: athleteToken.available_tokens + toGenerate
+          available_tokens: athleteToken.available_tokens + toGenerate,
+          market_cap: newMarketCap // <-- ADICIONA ESTA LINHA AQUI
         })
         .eq('id', athleteToken.id);
 
