@@ -72,7 +72,8 @@ const Auth = () => {
     const email = formData.get("email") as string;
     const phone = formData.get("phone") as string;
     const documentType = formData.get("documentType") as string;
-    const documentNumber = formData.get("documentNumber") as string;
+    const rawDocument = formData.get("documentNumber") as string;
+    const documentNumber = rawDocument.replace(/\D/g, ''); // Limpa pontos e traços
     const password = formData.get("password") as string;
     const confirmPassword = formData.get("confirmPassword") as string;
 
@@ -95,13 +96,24 @@ const Auth = () => {
       return;
     }
 
-    // Sign up with metadata
+    // Verifica se o CPF/CNPJ já está cadastrado no banco de dados
+    const { data: documentExists } = await supabase.rpc('check_document_exists', {
+      p_document: documentNumber
+    });
+
+    if (documentExists) {
+      toast.error("Este CPF/CNPJ já está vinculado a uma conta existente.");
+      setIsLoading(false);
+      return;
+    }
+
+    // Sign up com metadata (garantir que manda o documento limpo aqui)
     const { data, error } = await signUp(email, password, {
       first_name: firstName,
       last_name: lastName,
       phone: phone,
       document_type: documentType,
-      document_number: documentNumber
+      document_number: documentNumber // Documento apenas com números
     });
 
     setIsLoading(false);
@@ -118,14 +130,14 @@ const Auth = () => {
     }
 
     // Save profile data to profiles table
-    if (data.user) {
+    if (data?.user) {
       const { error: profileError } = await supabase
         .from('profiles')
         .insert({
           id: data.user.id,
           name: `${firstName} ${lastName}`.trim(),
           phone: phone,
-          document: documentNumber,
+          document: documentNumber, // Tem que ser a variável limpa aqui também!
           active_role: 'sponsor'
         });
 
