@@ -10,6 +10,7 @@ import { TrendingUp } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/lib/supabase";
+import logoInferior from "@/assets/logo-escrita-inferior.png";
 
 const Auth = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -160,7 +161,7 @@ const Auth = () => {
       <div className="w-full max-w-md relative z-10">
         {/* Logo/Header */}
         <Link to="/" className="flex items-center justify-center gap-2 mb-8">
-          <img src="src/assets/logo-escrita-inferior.png" alt="Logo Opatrocinador" height={250} width={250} />
+          <img src={logoInferior} alt="Logo Opatrocinador" height={250} width={250} />
         </Link>
 
         <Tabs defaultValue="login" className="w-full">

@@ -12,6 +12,7 @@ import {
 } from "./ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "./ui/avatar";
 import { toast } from "sonner";
+import logoLateral from "@/assets/logo-escrita-lateral.png";
 
 export const Navbar = () => {
   const { user, signOut } = useAuth();
@@ -36,7 +37,7 @@ export const Navbar = () => {
       <div className="container mx-auto px-4 h-16 flex items-center justify-between">
         <Link to="/" className="flex items-center gap-2">
           <img
-            src="/src/assets/logo-escrita-lateral.png"
+            src={logoLateral}
             alt="Logo Opatrocinador"
             className="w-[160px] md:w-[250px] h-auto object-contain"
           />
