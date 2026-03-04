@@ -36,7 +36,7 @@ export const Navbar = () => {
       <div className="container mx-auto px-4 h-16 flex items-center justify-between">
         <Link to="/" className="flex items-center gap-2">
           <img
-            src="src/assets/logo-escrita-lateral.png"
+            src="/src/assets/logo-escrita-lateral.png"
             alt="Logo Opatrocinador"
             className="w-[160px] md:w-[250px] h-auto object-contain"
           />
