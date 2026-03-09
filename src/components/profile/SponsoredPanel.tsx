@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Coins, Plus, DollarSign, Pencil, Loader2, UploadCloud, User } from "lucide-react";
+import { Coins, Plus, DollarSign, Pencil, Loader2, UploadCloud, User, X } from "lucide-react";
 import Cropper from 'react-easy-crop';
 import { toast } from "sonner";
 
@@ -17,7 +17,7 @@ const createImage = (url: string): Promise<HTMLImageElement> =>
     const image = new Image();
     image.addEventListener("load", () => resolve(image));
     image.addEventListener("error", (error) => reject(error));
-    image.setAttribute("crossOrigin", "anonymous"); // Previne problemas de CORS
+    image.setAttribute("crossOrigin", "anonymous");
     image.src = url;
   });
 
@@ -66,6 +66,8 @@ interface AthleteToken {
   social_instagram?: string;
   social_twitch?: string;
   social_youtube?: string;
+  featured_video?: string;
+  gallery_urls?: string[];
 }
 
 interface SponsoredPanelProps {
@@ -86,8 +88,12 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
-  const [selectedFileName, setSelectedFileName] = useState<string | null>(null); // Estado para o nome do arquivo
-  const fileInputRef = useRef<HTMLInputElement>(null); // Referência para o input invisível
+  const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [featuredVideo, setFeaturedVideo] = useState("");
+  const [galleryUrls, setGalleryUrls] = useState<string[]>([]);
+  const [uploadingGallery, setUploadingGallery] = useState(false);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
 
   // Profile fields
   const [athleteName, setAthleteName] = useState("");
@@ -126,6 +132,8 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
         setInstagram(data.social_instagram || "");
         setTwitch(data.social_twitch || "");
         setYoutube(data.social_youtube || "");
+        setFeaturedVideo(data.featured_video || "");
+        setGalleryUrls(data.gallery_urls || []);
       }
     } catch (error) {
       console.error('Error loading athlete tokens:', error);
@@ -142,7 +150,7 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
         return;
       }
 
-      setSelectedFileName(file.name); // Salva o nome do arquivo para mostrar na tela
+      setSelectedFileName(file.name);
 
       const reader = new FileReader();
       reader.readAsDataURL(file);
@@ -157,6 +165,40 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
 
   const onCropComplete = (croppedArea: any, croppedAreaPixels: any) => {
     setCroppedAreaPixels(croppedAreaPixels);
+  };
+
+  const onGalleryFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      try {
+        setUploadingGallery(true);
+        const file = e.target.files[0];
+        if (!file.type.startsWith('image/')) {
+          toast.error('Por favor, envie apenas imagens.');
+          return;
+        }
+
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${userId}-gallery-${Date.now()}.${fileExt}`;
+        const filePath = `${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('athlete_gallery')
+          .upload(filePath, file);
+
+        if (uploadError) throw uploadError;
+
+        const { data } = supabase.storage.from('athlete_gallery').getPublicUrl(filePath);
+
+        setGalleryUrls(prev => [...prev, data.publicUrl]);
+        toast.success('Imagem adicionada à galeria!');
+      } catch (error) {
+        console.error('Erro no upload:', error);
+        toast.error('Erro ao enviar a imagem.');
+      } finally {
+        setUploadingGallery(false);
+        e.target.value = '';
+      }
+    }
   };
 
   const handleCropConfirm = async () => {
@@ -223,7 +265,9 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
           social_youtube: youtube || null,
           market_cap: marketCap,
           volume_24h: 0,
-          price_change_24h: 0
+          price_change_24h: 0,
+          featured_video: featuredVideo || null,
+          gallery_urls: galleryUrls,
         });
 
       if (error) throw error;
@@ -257,6 +301,8 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
           social_instagram: instagram || null,
           social_twitch: twitch || null,
           social_youtube: youtube || null,
+          featured_video: featuredVideo || null,
+          gallery_urls: galleryUrls,
         })
         .eq('id', athleteToken?.id);
 
@@ -322,8 +368,8 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
     return <div>Carregando...</div>;
   }
 
-  // Componente reutilizável para a área de Upload de Imagem ATUALIZADO
-  const AvatarUploadArea = () => (
+  // Funções de Renderização em linha (Para evitar que os Inputs percam o foco ao digitar)
+  const renderAvatarUploadArea = () => (
     <div className="flex flex-col gap-4">
       <Label className="text-base font-semibold">Foto de Perfil</Label>
       <div className="flex flex-col sm:flex-row sm:items-center gap-6">
@@ -340,7 +386,6 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
           )}
         </div>
         <div className="flex-1">
-          {/* Input oculto sendo acionado pelo Botão */}
           <input
             type="file"
             accept="image/*"
@@ -367,6 +412,67 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
             Formatos aceitos: JPG ou PNG. Recomendado: Imagem com rosto centralizado.
           </p>
         </div>
+      </div>
+    </div>
+  );
+
+  const renderGalleryUploadArea = () => (
+    <div className="flex flex-col gap-4 border-t pt-4 mt-2">
+      <div>
+        <Label className="text-base font-semibold">Galeria & Vídeo (Opcional)</Label>
+        <p className="text-sm text-muted-foreground">Mostre mais do seu trabalho para seus investidores.</p>
+      </div>
+
+      <div>
+        <Label htmlFor="featuredVideo">Link para vídeo de Destaque</Label>
+        <Input
+          id="featuredVideo"
+          placeholder="Ex: https://www.youtube.com/watch?v=..."
+          value={featuredVideo}
+          onChange={(e) => setFeaturedVideo(e.target.value)}
+        />
+      </div>
+
+      <div className="space-y-3">
+        <Label>Fotos da Galeria</Label>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          {galleryUrls.map((url, index) => (
+            <div key={index} className="relative aspect-square rounded-md overflow-hidden border border-border group">
+              <img src={url} alt={`Galeria ${index}`} className="w-full h-full object-cover" />
+              <button
+                type="button"
+                onClick={() => setGalleryUrls(prev => prev.filter((_, i) => i !== index))}
+                className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          ))}
+
+          {galleryUrls.length < 6 && (
+            <div
+              onClick={() => !uploadingGallery && galleryInputRef.current?.click()}
+              className="aspect-square rounded-md border-2 border-dashed border-border flex flex-col items-center justify-center cursor-pointer hover:bg-muted transition-colors"
+            >
+              {uploadingGallery ? (
+                <Loader2 className="w-6 h-6 animate-spin text-primary" />
+              ) : (
+                <>
+                  <Plus className="w-6 h-6 text-muted-foreground mb-1" />
+                  <span className="text-xs text-muted-foreground">Adicionar foto</span>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+        <input
+          type="file"
+          accept="image/*"
+          className="hidden"
+          ref={galleryInputRef}
+          onChange={onGalleryFileChange}
+          disabled={uploadingGallery}
+        />
       </div>
     </div>
   );
@@ -480,7 +586,8 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
               />
             </div>
 
-            <AvatarUploadArea />
+            {renderAvatarUploadArea()}
+            {renderGalleryUploadArea()}
 
             <div>
               <Label htmlFor="achievements">Conquistas (uma por linha)</Label>
@@ -659,7 +766,8 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
                   <Textarea id="editDescription" value={description} onChange={(e) => setDescription(e.target.value)} rows={3} />
                 </div>
 
-                <AvatarUploadArea />
+                {renderAvatarUploadArea()}
+                {renderGalleryUploadArea()}
 
                 <div>
                   <Label htmlFor="editAchievements">Conquistas (uma por linha)</Label>

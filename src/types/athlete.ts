@@ -11,6 +11,8 @@ export interface Athlete {
   volume24h: number;
   description: string;
   achievements: string[];
+  featuredVideo?: string;
+  galleryUrls?: string[];
   socialMedia: {
     twitter?: string;
     instagram?: string;

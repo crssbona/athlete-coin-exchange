@@ -13,6 +13,13 @@ import { useAuth } from "@/hooks/useAuth";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts';
 
+const getYouTubeEmbedUrl = (url: string) => {
+  if (!url) return null;
+  const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
+  const match = url.match(regExp);
+  return (match && match[2].length === 11) ? `https://www.youtube.com/embed/${match[2]}` : null;
+};
+
 const AthletePage = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -39,7 +46,6 @@ const AthletePage = () => {
       const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
 
       try {
-        // 1. Tenta pegar o último preço negociado ANTES de 24h atrás
         let { data: pastTx } = await supabase
           .from('transactions')
           .select('price')
@@ -51,7 +57,6 @@ const AthletePage = () => {
 
         let oldPrice = pastTx?.price;
 
-        // 2. Se não houver, pega o PRIMEIRO preço negociado DENTRO das últimas 24h
         if (!oldPrice) {
           const { data: firstTx24h } = await supabase
             .from('transactions')
@@ -64,7 +69,6 @@ const AthletePage = () => {
           oldPrice = firstTx24h?.price;
         }
 
-        // 3. Calcula a porcentagem real (ou deixa 0% se não houver nenhuma transação)
         if (oldPrice) {
           const change = ((athlete.tokenPrice - oldPrice) / oldPrice) * 100;
           setRealPriceChange(change);
@@ -72,7 +76,6 @@ const AthletePage = () => {
           setRealPriceChange(0);
         }
 
-        // NOVO: Calcula o volume 24h real
         const { data: volumeTxs } = await supabase
           .from('transactions')
           .select('quantity, price')
@@ -91,8 +94,6 @@ const AthletePage = () => {
     fetch24hChange();
   }, [athlete?.id, athlete?.tokenPrice]);
 
-  // Lógica para gerar o desenho do gráfico
-  // Busca os dados reais de mercado
   useEffect(() => {
     const loadChartData = async () => {
       if (!athlete?.id) return;
@@ -102,7 +103,6 @@ const AthletePage = () => {
         const now = new Date();
         let startDate = new Date();
 
-        // Define a data de corte baseada no filtro selecionado
         if (timeframe === '1D') startDate.setDate(now.getDate() - 1);
         else if (timeframe === '1M') startDate.setMonth(now.getMonth() - 1);
         else if (timeframe === '1Y') startDate.setFullYear(now.getFullYear() - 1);
@@ -116,7 +116,6 @@ const AthletePage = () => {
 
         if (error) throw error;
 
-        // Se não houver transações no período, mostramos a mensagem
         if (!data || data.length === 0) {
           setChartEmpty(true);
           setChartData([]);
@@ -125,7 +124,6 @@ const AthletePage = () => {
 
         setChartEmpty(false);
 
-        // Formata as transações reais para o formato que o gráfico entende
         const formattedData = data.map(tx => {
           const date = new Date(tx.created_at);
           let timeLabel = '';
@@ -141,7 +139,6 @@ const AthletePage = () => {
           return { time: timeLabel, price: Number(tx.price) };
         });
 
-        // Adiciona o momento "Agora" para a linha conectar até o tempo presente
         formattedData.push({
           time: timeframe === '1D' ? now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) :
             timeframe === '1M' ? now.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) :
@@ -189,7 +186,6 @@ const AthletePage = () => {
 
   const loadAthlete = async () => {
     try {
-      // Try to load from Supabase first
       const { data, error } = await supabase
         .from('athlete_tokens')
         .select('*')
@@ -197,7 +193,6 @@ const AthletePage = () => {
         .maybeSingle();
 
       if (data && data.athlete_name) {
-        // Convert to Athlete type
         setAthlete({
           id: data.athlete_id,
           name: data.athlete_name,
@@ -211,22 +206,22 @@ const AthletePage = () => {
           volume24h: data.volume_24h || 0,
           description: data.description || '',
           achievements: data.achievements || [],
+          featuredVideo: data.featured_video || '',
+          galleryUrls: data.gallery_urls || [],
           socialMedia: {
             twitter: data.social_twitter,
             instagram: data.social_instagram,
             twitch: data.social_twitch,
             youtube: data.social_youtube,
           },
-          dbId: data.id // Store database ID for updates
+          dbId: data.id
         });
       } else {
-        // Fallback to mock data
         const mockAthlete = mockAthletes.find((a) => a.id === id);
         setAthlete(mockAthlete);
       }
     } catch (error) {
       console.error('Error loading athlete:', error);
-      // Fallback to mock data
       const mockAthlete = mockAthletes.find((a) => a.id === id);
       setAthlete(mockAthlete);
     } finally {
@@ -260,7 +255,6 @@ const AthletePage = () => {
     setWatchlistLoading(true);
     try {
       if (isInWatchlist) {
-        // Remove from watchlist
         const { error } = await supabase
           .from('user_watchlist')
           .delete()
@@ -271,7 +265,6 @@ const AthletePage = () => {
         setIsInWatchlist(false);
         toast.success('Removido da watchlist');
       } else {
-        // Add to watchlist
         const { error } = await supabase
           .from('user_watchlist')
           .insert({
@@ -434,7 +427,7 @@ const AthletePage = () => {
                 </CardContent>
               </Card>
 
-              {/* NOVO: Gráfico de Variação de Preço */}
+              {/* Gráfico de Variação de Preço */}
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between pb-2">
                   <CardTitle>Histórico de Preço</CardTitle>
@@ -538,13 +531,53 @@ const AthletePage = () => {
                   <ul className="space-y-2">
                     {athlete.achievements.map((achievement, index) => (
                       <li key={index} className="flex items-center gap-2">
-                        <Trophy className="w-4 h-4 text-premium" />
+                        <Trophy className="w-4 h-4 text-primary" />
                         <span>{achievement}</span>
                       </li>
                     ))}
                   </ul>
                 </CardContent>
               </Card>
+
+              {/* Galeria e Vídeo */}
+              {(athlete.featuredVideo || (athlete.galleryUrls && athlete.galleryUrls.length > 0)) && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Galeria</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    {/* YouTube Video */}
+                    {athlete.featuredVideo && getYouTubeEmbedUrl(athlete.featuredVideo) && (
+                      <div className="aspect-video rounded-lg overflow-hidden border border-border shadow-sm">
+                        <iframe
+                          width="100%"
+                          height="100%"
+                          src={getYouTubeEmbedUrl(athlete.featuredVideo)!}
+                          title="Apresentação do Atleta"
+                          frameBorder="0"
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allowFullScreen
+                        ></iframe>
+                      </div>
+                    )}
+
+                    {/* Gallery Images */}
+                    {athlete.galleryUrls && athlete.galleryUrls.length > 0 && (
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                        {athlete.galleryUrls.map((url: string, index: number) => (
+                          <div key={index} className="aspect-square rounded-lg overflow-hidden border border-border shadow-sm">
+                            <img
+                              src={url}
+                              alt={`Galeria ${athlete.name} ${index + 1}`}
+                              className="w-full h-full object-cover hover:scale-105 transition-transform duration-300 cursor-pointer"
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
             </div>
 
             {/* Right Column - Trading */}
