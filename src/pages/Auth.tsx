@@ -6,24 +6,117 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { TrendingUp } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Eye, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/lib/supabase";
 import logoInferior from "@/assets/logo-escrita-inferior.png";
 
+// Validação Matemática de CPF
+const isValidCPF = (cpf: string) => {
+  cpf = cpf.replace(/[^\d]+/g, '');
+  if (cpf.length !== 11 || !!cpf.match(/(\d)\1{10}/)) return false;
+  let sum = 0, rest;
+  for (let i = 1; i <= 9; i++) sum = sum + parseInt(cpf.substring(i - 1, i)) * (11 - i);
+  rest = (sum * 10) % 11;
+  if ((rest === 10) || (rest === 11)) rest = 0;
+  if (rest !== parseInt(cpf.substring(9, 10))) return false;
+  sum = 0;
+  for (let i = 1; i <= 10; i++) sum = sum + parseInt(cpf.substring(i - 1, i)) * (12 - i);
+  rest = (sum * 10) % 11;
+  if ((rest === 10) || (rest === 11)) rest = 0;
+  if (rest !== parseInt(cpf.substring(10, 11))) return false;
+  return true;
+};
+
+// Validação Matemática de CNPJ
+const isValidCNPJ = (cnpj: string) => {
+  cnpj = cnpj.replace(/[^\d]+/g, '');
+  if (cnpj.length !== 14 || !!cnpj.match(/(\d)\1{13}/)) return false;
+  let size = cnpj.length - 2;
+  let numbers = cnpj.substring(0, size);
+  let digits = cnpj.substring(size);
+  let sum = 0;
+  let pos = size - 7;
+  for (let i = size; i >= 1; i--) {
+    sum += parseInt(numbers.charAt(size - i)) * pos--;
+    if (pos < 2) pos = 9;
+  }
+  let result = sum % 11 < 2 ? 0 : 11 - sum % 11;
+  if (result !== parseInt(digits.charAt(0))) return false;
+  size = size + 1;
+  numbers = cnpj.substring(0, size);
+  sum = 0;
+  pos = size - 7;
+  for (let i = size; i >= 1; i--) {
+    sum += parseInt(numbers.charAt(size - i)) * pos--;
+    if (pos < 2) pos = 9;
+  }
+  result = sum % 11 < 2 ? 0 : 11 - sum % 11;
+  if (result !== parseInt(digits.charAt(1))) return false;
+  return true;
+};
+
 const Auth = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [keepConnected, setKeepConnected] = useState(true);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  // Estados para Formatação de Documento
+  const [docType, setDocType] = useState<string>("cpf");
+  const [docValue, setDocValue] = useState("");
+
+  // Estados para Formatação de Telefone
+  const [phoneCode, setPhoneCode] = useState<string>("+55");
+  const [phoneValue, setPhoneValue] = useState("");
+
   const navigate = useNavigate();
   const { user, signIn, signUp } = useAuth();
 
-  // Redirect if already logged in
   useEffect(() => {
     if (user) {
       navigate('/');
     }
   }, [user, navigate]);
+
+  // Função para formatar o documento em tempo real
+  const handleDocumentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let value = e.target.value.replace(/\D/g, '');
+
+    if (docType === 'cpf') {
+      if (value.length > 11) value = value.slice(0, 11);
+      value = value.replace(/(\d{3})(\d)/, '$1.$2');
+      value = value.replace(/(\d{3})(\d)/, '$1.$2');
+      value = value.replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+    } else if (docType === 'cnpj') {
+      if (value.length > 14) value = value.slice(0, 14);
+      value = value.replace(/^(\d{2})(\d)/, '$1.$2');
+      value = value.replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3');
+      value = value.replace(/\.(\d{3})(\d)/, '.$1/$2');
+      value = value.replace(/(\d{4})(\d)/, '$1-$2');
+    }
+
+    setDocValue(value);
+  };
+
+  // Função para formatar o telefone em tempo real
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let value = e.target.value.replace(/\D/g, '');
+
+    if (phoneCode === '+55') {
+      // Máscara do Brasil: (XX) XXXXX-XXXX
+      if (value.length > 11) value = value.slice(0, 11);
+      if (value.length > 2) value = value.replace(/^(\d{2})(\d)/g, '($1) $2');
+      if (value.length > 9) value = value.replace(/(\d{4,5})(\d{4})$/, '$1-$2');
+    } else {
+      // Genérico para outros países (sem pontuação fixa)
+      if (value.length > 15) value = value.slice(0, 15);
+    }
+
+    setPhoneValue(value);
+  };
 
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -48,13 +141,10 @@ const Auth = () => {
       return;
     }
 
-    // LÓGICA DE MANTER CONECTADO
     if (!keepConnected) {
-      // Se não quiser manter, criamos uma flag local e um cookie de sessão temporário
       localStorage.setItem('temp_session_flag', 'true');
       document.cookie = "session_active=true; path=/;";
     } else {
-      // Se quiser manter (padrão), limpamos as flags
       localStorage.removeItem('temp_session_flag');
       document.cookie = "session_active=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
     }
@@ -71,14 +161,13 @@ const Auth = () => {
     const firstName = formData.get("firstName") as string;
     const lastName = formData.get("lastName") as string;
     const email = formData.get("email") as string;
-    const phone = formData.get("phone") as string;
-    const documentType = formData.get("documentType") as string;
-    const rawDocument = formData.get("documentNumber") as string;
-    const documentNumber = rawDocument.replace(/\D/g, ''); // Limpa pontos e traços
     const password = formData.get("password") as string;
     const confirmPassword = formData.get("confirmPassword") as string;
 
-    // Client-side validation
+    const documentNumber = docValue.replace(/\D/g, '');
+    const finalPhone = `${phoneCode} ${phoneValue}`; // Junta o DDI com o número formatado
+
+    // Validações
     if (password !== confirmPassword) {
       toast.error("As senhas não coincidem");
       setIsLoading(false);
@@ -97,24 +186,42 @@ const Auth = () => {
       return;
     }
 
-    // Verifica se o CPF/CNPJ já está cadastrado no banco de dados
+    if (phoneValue.replace(/\D/g, '').length < 8) {
+      toast.error("Número de telefone muito curto.");
+      setIsLoading(false);
+      return;
+    }
+
+    // Validação Matemática de Documento
+    if (docType === 'cpf' && !isValidCPF(documentNumber)) {
+      toast.error("O CPF digitado é inválido.");
+      setIsLoading(false);
+      return;
+    }
+
+    if (docType === 'cnpj' && !isValidCNPJ(documentNumber)) {
+      toast.error("O CNPJ digitado é inválido.");
+      setIsLoading(false);
+      return;
+    }
+
+    // Verifica duplicação no banco de dados
     const { data: documentExists } = await supabase.rpc('check_document_exists', {
       p_document: documentNumber
     });
 
     if (documentExists) {
-      toast.error("Este CPF/CNPJ já está vinculado a uma conta existente.");
+      toast.error(`Este ${docType.toUpperCase()} já está vinculado a uma conta existente.`);
       setIsLoading(false);
       return;
     }
 
-    // Sign up com metadata (garantir que manda o documento limpo aqui)
     const { data, error } = await signUp(email, password, {
       first_name: firstName,
       last_name: lastName,
-      phone: phone,
-      document_type: documentType,
-      document_number: documentNumber // Documento apenas com números
+      phone: finalPhone, // Usa o telefone combinado
+      document_type: docType,
+      document_number: documentNumber
     });
 
     setIsLoading(false);
@@ -130,15 +237,14 @@ const Auth = () => {
       return;
     }
 
-    // Save profile data to profiles table
     if (data?.user) {
       const { error: profileError } = await supabase
         .from('profiles')
         .insert({
           id: data.user.id,
           name: `${firstName} ${lastName}`.trim(),
-          phone: phone,
-          document: documentNumber, // Tem que ser a variável limpa aqui também!
+          phone: finalPhone, // Usa o telefone combinado
+          document: documentNumber,
           active_role: 'sponsor'
         });
 
@@ -195,16 +301,27 @@ const Auth = () => {
 
                   <div className="space-y-2">
                     <Label htmlFor="login-password">Senha</Label>
-                    <Input
-                      id="login-password"
-                      name="password"
-                      type="password"
-                      placeholder="••••••••"
-                      required
-                      disabled={isLoading}
-                    />
+                    <div className="relative">
+                      <Input
+                        id="login-password"
+                        name="password"
+                        type={showPassword ? "text" : "password"}
+                        placeholder="••••••••"
+                        required
+                        disabled={isLoading}
+                        className="pr-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-primary transition-colors"
+                      >
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
                   </div>
 
+                  {/* Checkbox de Manter Conectado */}
                   <div className="flex items-center space-x-2 py-2">
                     <Checkbox
                       id="keep-connected"
@@ -289,43 +406,66 @@ const Auth = () => {
                     />
                   </div>
 
-                  {/* Phone */}
+                  {/* NOVO: Telefone com Seletor de País */}
                   <div className="space-y-2">
-                    <Label htmlFor="signup-phone">Telefone/WhatsApp</Label>
-                    <Input
-                      id="signup-phone"
-                      name="phone"
-                      type="tel"
-                      placeholder="(00) 00000-0000"
-                      required
-                      disabled={isLoading}
-                    />
+                    <Label>Telefone/WhatsApp</Label>
+                    <div className="flex gap-2">
+                      <Select
+                        value={phoneCode}
+                        onValueChange={(val) => {
+                          setPhoneCode(val);
+                          setPhoneValue(""); // Limpa o campo se trocar de país para evitar bugs
+                        }}
+                      >
+                        <SelectTrigger className="w-[110px]" disabled={isLoading}>
+                          <SelectValue placeholder="DDI" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="+55">🇧🇷 +55</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        id="signup-phone"
+                        type="tel"
+                        placeholder={phoneCode === '+55' ? "(00) 00000-0000" : "000000000"}
+                        value={phoneValue}
+                        onChange={handlePhoneChange}
+                        required
+                        disabled={isLoading}
+                        className="flex-1"
+                      />
+                    </div>
                   </div>
 
                   {/* Document Fields */}
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="signup-doctype">Tipo de Documento</Label>
-                      <select
-                        id="signup-doctype"
-                        name="documentType"
-                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                        required
-                        disabled={isLoading}
+                      <Label>Tipo de Documento</Label>
+                      <Select
+                        value={docType}
+                        onValueChange={(val) => {
+                          setDocType(val);
+                          setDocValue("");
+                        }}
                       >
-                        <option value="">Selecione</option>
-                        <option value="cpf">CPF</option>
-                        <option value="cnpj">CNPJ</option>
-                      </select>
+                        <SelectTrigger disabled={isLoading}>
+                          <SelectValue placeholder="Selecione" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="cpf">CPF</SelectItem>
+                          <SelectItem value="cnpj">CNPJ</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
 
                     <div className="space-y-2">
                       <Label htmlFor="signup-docnumber">Número do Documento</Label>
                       <Input
                         id="signup-docnumber"
-                        name="documentNumber"
                         type="text"
-                        placeholder="000.000.000-00"
+                        placeholder={docType === 'cpf' ? "000.000.000-00" : "00.000.000/0000-00"}
+                        value={docValue}
+                        onChange={handleDocumentChange}
                         required
                         disabled={isLoading}
                       />
@@ -336,28 +476,48 @@ const Auth = () => {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="signup-password">Senha</Label>
-                      <Input
-                        id="signup-password"
-                        name="password"
-                        type="password"
-                        placeholder="Mínimo 8 caracteres"
-                        required
-                        disabled={isLoading}
-                        minLength={8}
-                      />
+                      <div className="relative">
+                        <Input
+                          id="signup-password"
+                          name="password"
+                          type={showPassword ? "text" : "password"}
+                          placeholder="Mínimo 8"
+                          required
+                          disabled={isLoading}
+                          minLength={8}
+                          className="pr-10"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-primary transition-colors"
+                        >
+                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
                     </div>
 
                     <div className="space-y-2">
                       <Label htmlFor="signup-confirm">Confirmar Senha</Label>
-                      <Input
-                        id="signup-confirm"
-                        name="confirmPassword"
-                        type="password"
-                        placeholder="Digite a senha novamente"
-                        required
-                        disabled={isLoading}
-                        minLength={8}
-                      />
+                      <div className="relative">
+                        <Input
+                          id="signup-confirm"
+                          name="confirmPassword"
+                          type={showConfirmPassword ? "text" : "password"}
+                          placeholder="Novamente"
+                          required
+                          disabled={isLoading}
+                          minLength={8}
+                          className="pr-10"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-primary transition-colors"
+                        >
+                          {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
                     </div>
                   </div>
 
