@@ -47,6 +47,7 @@ export default function Profile() {
       if (error) throw error;
 
       // Se não existe perfil, cria um básico
+      // Se não existe perfil, cria um básico
       if (!data) {
         const newProfile = {
           id: user?.id,
@@ -55,7 +56,8 @@ export default function Profile() {
             : user?.email?.split('@')[0] || 'Usuário',
           phone: user?.user_metadata?.phone,
           document: user?.user_metadata?.document_number,
-          active_role: 'sponsored' as const
+          active_role: 'sponsored' as const,
+          user_type: user?.user_metadata?.user_type || 'sponsored' // <-- Adicionado para corrigir a restrição do banco
         };
 
         const { error: insertError } = await supabase
