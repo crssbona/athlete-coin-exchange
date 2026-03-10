@@ -15,7 +15,6 @@ import Profile from "./pages/Profile";
 import Watchlist from "./pages/Watchlist";
 import NotFound from "./pages/NotFound";
 import WalletPage from "./pages/Wallet";
-import AssetPage from "./pages/AssetPage";
 
 const queryClient = new QueryClient();
 
@@ -31,7 +30,6 @@ function App() {
             <Route path="/marketplace" element={<Marketplace />} />
             <Route path="/athlete/:id" element={<AthletePage />} />
             <Route path="/how-it-works" element={<HowItWorks />} />
-            <Route path="/asset/:id" element={<AssetPage />} />
             <Route path="/auth" element={<Auth />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />

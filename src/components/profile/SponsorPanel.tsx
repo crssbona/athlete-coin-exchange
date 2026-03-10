@@ -3,180 +3,424 @@ import { supabase } from "@/lib/supabase";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { TrendingUp, TrendingDown, Image as ImageIcon, Clock, ArrowUpRight } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { TrendingUp, TrendingDown, Clock, ArrowUpRight } from "lucide-react";
+import { mockAthletes } from "@/data/mockAthletes";
 import { toast } from "sonner";
 import { Link } from "react-router-dom";
 
-// Interfaces
-interface UserAssetToken { id: string; asset_id: string; quantity: number; average_purchase_price: number; updated_at: string; }
-interface PendingPurchase { id: string; asset_id: string; quantity: number; limit_price: number; created_at: string; }
-interface PendingSale { id: string; asset_id: string; quantity: number; limit_price: number; created_at: string; }
-interface TransactionRecord { id: string; asset_id: string; type: 'buy' | 'sell'; quantity: number; price: number; created_at: string; }
+interface UserToken {
+  id: string;
+  athlete_id: string;
+  quantity: number;
+  purchase_price: number;
+  purchased_at: string;
+}
 
-export function SponsorPanel({ userId }: { userId: string }) {
-  const [tokens, setTokens] = useState<UserAssetToken[]>([]);
-  const [transactions, setTransactions] = useState<TransactionRecord[]>([]);
+interface PendingPurchase {
+  id: string;
+  athlete_id: string;
+  quantity: number;
+  limit_price: number;
+  created_at: string;
+}
+
+interface PendingSale {
+  id: string;
+  athlete_id: string;
+  quantity: number;
+  limit_price: number;
+  created_at: string;
+}
+
+interface SponsorPanelProps {
+  userId: string;
+}
+
+interface TransactionRecord {
+  id: string;
+  athlete_id: string;
+  type: 'buy' | 'sell';
+  quantity: number;
+  price: number;
+  created_at: string;
+  original_quantity?: number;
+}
+
+export function SponsorPanel({ userId }: SponsorPanelProps) {
+  const [tokens, setTokens] = useState<UserToken[]>([]);
   const [pendingPurchases, setPendingPurchases] = useState<PendingPurchase[]>([]);
   const [pendingSales, setPendingSales] = useState<PendingSale[]>([]);
+  const [transactions, setTransactions] = useState<TransactionRecord[]>([]);
   const [loading, setLoading] = useState(true);
-  const [assetsData, setAssetsData] = useState<Map<string, any>>(new Map());
+  const [athletesData, setAthletesData] = useState<Map<string, any>>(new Map());
 
-  const [cancellingId, setCancellingId] = useState<string | null>(null);
-
-  // Estados do Dialog de Venda
+  // Sell dialog state
   const [sellDialogOpen, setSellDialogOpen] = useState(false);
-  const [selectedWalletItem, setSelectedWalletItem] = useState<UserAssetToken | null>(null);
+  const [selectedWalletItem, setSelectedWalletItem] = useState<any>(null);
   const [sellQuantity, setSellQuantity] = useState(1);
   const [sellPrice, setSellPrice] = useState("");
   const [selling, setSelling] = useState(false);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [cancellingSaleId, setCancellingSaleId] = useState<string | null>(null);
 
-  useEffect(() => { loadWalletAndTransactions(); }, [userId]);
+  useEffect(() => {
+    loadTokens();
+    loadPendingPurchases();
+    loadPendingSales();
+    loadTransactions(); // <-- ADICIONE AQUI
+  }, [userId]);
 
-  const loadWalletAndTransactions = async () => {
-    setLoading(true);
+  const loadTransactions = async () => {
     try {
-      const { data: tokensData } = await supabase.from('user_asset_tokens').select('*').eq('user_id', userId).order('updated_at', { ascending: false });
-      setTokens(tokensData || []);
+      const { data, error } = await supabase
+        .from('transactions')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
 
-      const { data: txData } = await supabase.from('transactions').select('*').eq('user_id', userId).order('created_at', { ascending: false });
-      setTransactions(txData || []);
-
-      const { data: pendingPurchasesData } = await supabase.from('pending_purchases').select('*').eq('user_id', userId).eq('status', 'pending').order('created_at', { ascending: false });
-      setPendingPurchases(pendingPurchasesData || []);
-
-      const { data: pendingSalesData } = await supabase.from('pending_sales').select('*').eq('user_id', userId).eq('status', 'pending').order('created_at', { ascending: false });
-      setPendingSales(pendingSalesData || []);
+      if (error) throw error;
+      setTransactions(data || []);
     } catch (error) {
-      console.error('Erro ao carregar dados:', error);
+      console.error('Error loading transactions:', error);
+    }
+  };
+
+  // Atualize este useEffect para reagir também às transações
+  useEffect(() => {
+    if (tokens.length > 0 || pendingPurchases.length > 0 || pendingSales.length > 0 || transactions.length > 0) loadAthletesData();
+  }, [tokens, pendingPurchases, pendingSales, transactions]);
+
+  const loadTokens = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('user_tokens')
+        .select('*')
+        .eq('user_id', userId)
+        .order('purchased_at', { ascending: false });
+
+      if (error) throw error;
+      setTokens(data || []);
+    } catch (error) {
+      console.error('Error loading tokens:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    if (tokens.length > 0 || transactions.length > 0 || pendingPurchases.length > 0 || pendingSales.length > 0) {
-      loadAssetsDetails();
-    }
-  }, [tokens, transactions, pendingPurchases, pendingSales]);
-
-  const loadAssetsDetails = async () => {
-    const assetIds = [...new Set([...tokens.map(t => t.asset_id), ...transactions.map(t => t.asset_id), ...pendingPurchases.map(p => p.asset_id), ...pendingSales.map(s => s.asset_id)])].filter(Boolean);
-    if (assetIds.length === 0) return;
-
-    const { data } = await supabase.from('athlete_assets').select('id, title, image_url, current_price, athlete_id').in('id', assetIds);
-    const dataMap = new Map();
-    if (data) data.forEach(asset => dataMap.set(asset.id, { title: asset.title, imageUrl: asset.image_url, currentPrice: Number(asset.current_price), athleteId: asset.athlete_id }));
-    setAssetsData(dataMap);
-  };
-
-  const getAssetInfo = (assetId: string) => assetsData.get(assetId);
-
-  // AÇÕES
-  const handleCancelPending = async (pendingId: string, isSale: boolean = false) => {
-    setCancellingId(pendingId);
+  const loadPendingPurchases = async () => {
     try {
-      const rpcName = isSale ? 'cancel_pending_sale' : 'cancel_pending_purchase';
-      const payload = isSale ? { p_pending_sale_id: pendingId } : { p_pending_purchase_id: pendingId };
-      const { data, error } = await supabase.rpc(rpcName, payload);
+      const { data, error } = await supabase
+        .from('pending_purchases')
+        .select('id, athlete_id, quantity, limit_price, created_at')
+        .eq('user_id', userId)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false });
 
       if (error) throw error;
-      if (data?.success) {
-        toast.success('Ordem cancelada com sucesso!');
-        loadWalletAndTransactions();
-      } else {
-        toast.error(data?.message || 'Erro ao cancelar ordem');
-      }
-    } catch (error: any) {
-      toast.error('Erro de conexão ao cancelar.');
-    } finally {
-      setCancellingId(null);
+      setPendingPurchases(data || []);
+    } catch (error) {
+      console.error('Error loading pending purchases:', error);
     }
   };
 
-  const openSellDialog = (item: UserAssetToken) => {
-    setSelectedWalletItem(item);
+  const loadPendingSales = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('pending_sales')
+        .select('id, athlete_id, quantity, limit_price, created_at')
+        .eq('user_id', userId)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setPendingSales(data || []);
+    } catch (error) {
+      console.error('Error loading pending sales:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (tokens.length > 0 || pendingPurchases.length > 0 || pendingSales.length > 0) loadAthletesData();
+  }, [tokens, pendingPurchases, pendingSales]);
+
+  const loadAthletesData = async () => {
+    const tokenAthleteIds = tokens.map(t => t.athlete_id);
+    const pendingAthleteIds = pendingPurchases.map(p => p.athlete_id);
+    const pendingSaleAthleteIds = pendingSales.map(p => p.athlete_id);
+    const txAthleteIds = transactions.map(t => t.athlete_id);
+    const athleteIds = [...new Set([...tokenAthleteIds, ...pendingAthleteIds, ...pendingSaleAthleteIds, ...txAthleteIds])];
+    const dataMap = new Map();
+
+    const { data } = await supabase
+      .from('athlete_tokens')
+      .select('*')
+      .in('athlete_id', athleteIds);
+
+    if (data) {
+      data.forEach(athlete => {
+        dataMap.set(athlete.athlete_id, {
+          name: athlete.athlete_name,
+          avatar: athlete.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${athlete.athlete_name}`,
+          tokenPrice: athlete.price_per_token,
+          sport: athlete.sport
+        });
+      });
+    }
+
+    athleteIds.forEach(id => {
+      if (!dataMap.has(id)) {
+        const mock = mockAthletes.find(a => a.id === id);
+        if (mock) dataMap.set(id, mock);
+      }
+    });
+
+    setAthletesData(dataMap);
+  };
+
+  const getAthleteInfo = (athleteId: string) => athletesData.get(athleteId);
+
+  const calculatePriceChange = (purchasePrice: number, currentPrice: number) =>
+    ((currentPrice - purchasePrice) / purchasePrice) * 100;
+
+  const getTotalValue = () =>
+    tokens.reduce((sum, token) => {
+      const athlete = getAthleteInfo(token.athlete_id);
+      return athlete ? sum + token.quantity * athlete.tokenPrice : sum;
+    }, 0);
+
+  const getTotalInvested = () =>
+    tokens.reduce((sum, token) => sum + token.quantity * token.purchase_price, 0);
+
+  // Agrupa os tokens por atleta para montar a visualização da Carteira
+  const groupedTokens = tokens.reduce((acc, token) => {
+    if (!acc[token.athlete_id]) {
+      acc[token.athlete_id] = {
+        athlete_id: token.athlete_id,
+        totalQuantity: 0,
+        totalInvested: 0,
+        tokens: [] // Guardamos os tokens originais caso precise
+      };
+    }
+    acc[token.athlete_id].totalQuantity += token.quantity;
+    acc[token.athlete_id].totalInvested += (token.quantity * token.purchase_price);
+    acc[token.athlete_id].tokens.push(token);
+    return acc;
+  }, {} as Record<string, { athlete_id: string, totalQuantity: number, totalInvested: number, tokens: UserToken[] }>);
+
+  const walletItems = Object.values(groupedTokens);
+
+  const openSellDialog = (walletItem: any) => {
+    const athlete = getAthleteInfo(walletItem.athlete_id);
+    setSelectedWalletItem(walletItem); // Agora salva a carteira agrupada
     setSellQuantity(1);
-    const info = getAssetInfo(item.asset_id);
-    setSellPrice(info?.currentPrice?.toFixed(2) || "0");
+    setSellPrice(athlete?.tokenPrice?.toFixed(2) || "0");
     setSellDialogOpen(true);
   };
 
   const handleSell = async () => {
     if (!selectedWalletItem) return;
 
-    const priceNum = parseFloat(sellPrice);
-    if (isNaN(priceNum) || priceNum <= 0) { toast.error("Preço de venda inválido."); return; }
-    if (sellQuantity <= 0 || sellQuantity > selectedWalletItem.quantity) { toast.error("Quantidade inválida."); return; }
+    const price = parseFloat(sellPrice);
+    if (isNaN(price) || price <= 0) {
+      toast.error("Preço de venda inválido");
+      return;
+    }
+    if (sellQuantity <= 0 || sellQuantity > selectedWalletItem.totalQuantity) {
+      toast.error("Quantidade inválida");
+      return;
+    }
 
     setSelling(true);
     try {
-      const { data, error } = await supabase.rpc('place_sell_order', {
-        p_asset_id: selectedWalletItem.asset_id,
-        p_quantity: sellQuantity,
-        p_sell_price: priceNum
-      });
+      let remainingToSell = sellQuantity;
+      let somePending = false;
+      let someExecuted = false;
 
-      if (error) throw error;
+      // Ordenar os tokens pelos mais antigos primeiro (FIFO - First In First Out)
+      const sortedTokens = [...selectedWalletItem.tokens].sort((a, b) =>
+        new Date(a.purchased_at).getTime() - new Date(b.purchased_at).getTime()
+      );
 
-      if (data && data.executed === false) {
-        if (data.pending) {
-          toast.info(data.message || "Ordem de venda colocada em espera.");
-        } else {
-          toast.error(data.message || "Erro ao realizar venda.");
-          setSelling(false);
-          return;
-        }
+      // Passa por todos os lotes do usuário até atingir a quantidade que ele quer vender
+      for (const token of sortedTokens) {
+        if (remainingToSell <= 0) break;
+
+        const qtyFromBatch = Math.min(token.quantity, remainingToSell);
+
+        const { data, error } = await supabase.rpc('place_sell_order', {
+          p_user_token_id: token.id,
+          p_athlete_id: token.athlete_id,
+          p_quantity: qtyFromBatch,
+          p_sell_price: price
+        });
+
+        if (error) throw error;
+
+        if (data?.executed) someExecuted = true;
+        if (data?.pending) somePending = true;
+
+        remainingToSell -= qtyFromBatch;
+      }
+
+      const athlete = getAthleteInfo(selectedWalletItem.athlete_id);
+
+      if (someExecuted && !somePending) {
+        toast.success(`Venda realizada! ${sellQuantity} tokens de ${athlete?.name || 'atleta'}`);
+      } else if (somePending && !someExecuted) {
+        toast.success(`Venda em espera! ${sellQuantity} tokens de ${athlete?.name || 'atleta'} aguardam o preço chegar a R$ ${price.toFixed(2)}`);
       } else {
-        toast.success(data.message || "Venda imediata realizada com sucesso!");
+        toast.success(`Ordem processada! Parte executada e parte em espera.`);
       }
 
       setSellDialogOpen(false);
-      loadWalletAndTransactions();
+      await loadTokens();
+      await loadPendingSales();
     } catch (error: any) {
-      toast.error(error.message || "Erro ao conectar com o mercado.");
+      console.error('Error selling tokens:', error);
+      toast.error(error.message || 'Erro ao vender tokens');
     } finally {
       setSelling(false);
     }
   };
 
-  // CÁLCULOS
-  const getTotalInvested = () => tokens.reduce((sum, t) => sum + (t.quantity * t.average_purchase_price), 0);
-  const getTotalValue = () => tokens.reduce((sum, t) => { const info = getAssetInfo(t.asset_id); return info ? sum + (t.quantity * info.currentPrice) : sum; }, 0);
+  const handleCancelPending = async (pendingId: string) => {
+    setCancellingId(pendingId);
+    try {
+      const { data, error } = await supabase.rpc('cancel_pending_purchase', {
+        p_pending_purchase_id: pendingId
+      });
 
-  if (loading) return <div className="py-8 text-center text-muted-foreground animate-pulse">A carregar investimentos...</div>;
+      if (error) throw error;
 
-  const totalInvested = getTotalInvested();
-  const totalValue = getTotalValue();
-  const profit = totalValue - totalInvested;
+      if (data?.success) {
+        toast.success('Ordem cancelada');
+        await loadPendingPurchases();
+      } else {
+        toast.error(data?.message || 'Erro ao cancelar ordem');
+      }
+    } catch (error: any) {
+      console.error('Error cancelling pending purchase:', error);
+      toast.error(error.message || 'Erro ao cancelar ordem');
+    } finally {
+      setCancellingId(null);
+    }
+  };
+
+  const handleCancelPendingSale = async (pendingSaleId: string) => {
+    setCancellingSaleId(pendingSaleId);
+    try {
+      const { data, error } = await supabase.rpc('cancel_pending_sale', {
+        p_pending_sale_id: pendingSaleId
+      });
+
+      if (error) throw error;
+
+      if (data?.success) {
+        toast.success('Venda cancelada');
+        await loadPendingSales();
+      } else {
+        toast.error(data?.message || 'Erro ao cancelar venda');
+      }
+    } catch (error: any) {
+      console.error('Error cancelling pending sale:', error);
+      toast.error(error.message || 'Erro ao cancelar venda');
+    } finally {
+      setCancellingSaleId(null);
+    }
+  };
+
+  if (loading) {
+    return <div>Carregando tokens...</div>;
+  }
 
   return (
     <div className="space-y-6">
-      {/* Resumo Financeiro */}
+      {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card><CardHeader><CardDescription>Valor Investido</CardDescription><CardTitle className="text-2xl">R$ {totalInvested.toFixed(2)}</CardTitle></CardHeader></Card>
-        <Card><CardHeader><CardDescription>Valor Atual</CardDescription><CardTitle className="text-2xl">R$ {totalValue.toFixed(2)}</CardTitle></CardHeader></Card>
-        <Card><CardHeader><CardDescription>Lucro/Prejuízo</CardDescription><CardTitle className="text-2xl flex items-center gap-2">R$ {profit.toFixed(2)}{profit >= 0 ? <TrendingUp className="w-5 h-5 text-green-500" /> : <TrendingDown className="w-5 h-5 text-red-500" />}</CardTitle></CardHeader></Card>
+        <Card>
+          <CardHeader>
+            <CardDescription>Valor Investido</CardDescription>
+            <CardTitle className="text-2xl">R$ {getTotalInvested().toFixed(2)}</CardTitle>
+          </CardHeader>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardDescription>Valor Atual</CardDescription>
+            <CardTitle className="text-2xl">R$ {getTotalValue().toFixed(2)}</CardTitle>
+          </CardHeader>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardDescription>Lucro/Prejuízo</CardDescription>
+            <CardTitle className="text-2xl flex items-center gap-2">
+              R$ {(getTotalValue() - getTotalInvested()).toFixed(2)}
+              {getTotalValue() >= getTotalInvested() ? (
+                <TrendingUp className="w-5 h-5 text-green-500" />
+              ) : (
+                <TrendingDown className="w-5 h-5 text-red-500" />
+              )}
+            </CardTitle>
+          </CardHeader>
+        </Card>
       </div>
 
-      {/* Ordens de Compra Pendentes */}
+      {/* Compras em espera */}
       {pendingPurchases.length > 0 && (
-        <Card className="border-amber-500/30 shadow-md">
-          <CardHeader><CardTitle className="flex items-center gap-2 text-amber-600"><Clock className="w-5 h-5" />Compras em Espera</CardTitle></CardHeader>
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Clock className="w-5 h-5" />
+              Compras em espera
+            </CardTitle>
+            <CardDescription>
+              Ordens limitadas aguardando o token alcançar o preço desejado
+            </CardDescription>
+          </CardHeader>
           <CardContent>
             <div className="space-y-4">
               {pendingPurchases.map((order) => {
-                const info = getAssetInfo(order.asset_id);
-                if (!info) return null;
+                const athlete = getAthleteInfo(order.athlete_id);
+                const createdDate = new Date(order.created_at).toLocaleDateString('pt-BR', {
+                  day: '2-digit',
+                  month: '2-digit',
+                  year: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                });
                 return (
-                  <div key={order.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 border rounded-lg bg-amber-50/10 gap-4">
+                  <div
+                    key={order.id}
+                    className="flex items-center justify-between p-4 border rounded-lg bg-muted/30"
+                  >
                     <div className="flex items-center gap-4">
-                      {info.imageUrl ? <img src={info.imageUrl} className="w-12 h-12 rounded-md object-cover" /> : <div className="w-12 h-12 rounded-md bg-muted flex items-center justify-center"><ImageIcon className="w-5 h-5 opacity-50" /></div>}
-                      <div><h4 className="font-semibold">{info.title}</h4><p className="text-sm text-muted-foreground">{order.quantity} cotas • Max: R$ {order.limit_price.toFixed(2)}</p></div>
+                      {athlete?.avatar && (
+                        <Link to={`/athlete/${order.athlete_id}`}>
+                          <img
+                            src={athlete.avatar}
+                            alt={athlete?.name || 'Atleta'}
+                            className="w-12 h-12 rounded-full object-cover cursor-pointer hover:ring-2 hover:ring-primary transition-all"
+                          />
+                        </Link>
+                      )}
+                      <div>
+                        <h4 className="font-semibold">{athlete?.name || 'Atleta'}</h4>
+                        <p className="text-sm text-muted-foreground">
+                          {order.quantity} tokens • Preço limite: R$ {order.limit_price.toFixed(2)}
+                        </p>
+                        <p className="text-xs text-muted-foreground">Criada em {createdDate}</p>
+                      </div>
                     </div>
-                    <Button variant="outline" size="sm" onClick={() => handleCancelPending(order.id, false)} disabled={cancellingId === order.id}>{cancellingId === order.id ? 'A cancelar...' : 'Cancelar Ordem'}</Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleCancelPending(order.id)}
+                      disabled={cancellingId === order.id}
+                    >
+                      {cancellingId === order.id ? 'Cancelando...' : 'Cancelar ordem'}
+                    </Button>
                   </div>
                 );
               })}
@@ -185,22 +429,60 @@ export function SponsorPanel({ userId }: { userId: string }) {
         </Card>
       )}
 
-      {/* Ordens de Venda Pendentes */}
+      {/* Vendas em espera */}
       {pendingSales.length > 0 && (
-        <Card className="border-blue-500/30 shadow-md">
-          <CardHeader><CardTitle className="flex items-center gap-2 text-blue-600"><ArrowUpRight className="w-5 h-5" />Vendas em Espera</CardTitle></CardHeader>
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <ArrowUpRight className="w-5 h-5" />
+              Vendas em espera
+            </CardTitle>
+            <CardDescription>
+              Ordens limitadas aguardando o token alcançar o preço desejado
+            </CardDescription>
+          </CardHeader>
           <CardContent>
             <div className="space-y-4">
               {pendingSales.map((sale) => {
-                const info = getAssetInfo(sale.asset_id);
-                if (!info) return null;
+                const athlete = getAthleteInfo(sale.athlete_id);
+                const createdDate = new Date(sale.created_at).toLocaleDateString('pt-BR', {
+                  day: '2-digit',
+                  month: '2-digit',
+                  year: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                });
                 return (
-                  <div key={sale.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 border rounded-lg bg-blue-50/10 gap-4">
+                  <div
+                    key={sale.id}
+                    className="flex items-center justify-between p-4 border rounded-lg bg-muted/30"
+                  >
                     <div className="flex items-center gap-4">
-                      {info.imageUrl ? <img src={info.imageUrl} className="w-12 h-12 rounded-md object-cover" /> : <div className="w-12 h-12 rounded-md bg-muted flex items-center justify-center"><ImageIcon className="w-5 h-5 opacity-50" /></div>}
-                      <div><h4 className="font-semibold">{info.title}</h4><p className="text-sm text-muted-foreground">{sale.quantity} cotas • Min: R$ {sale.limit_price.toFixed(2)}</p></div>
+                      {athlete?.avatar && (
+                        <Link to={`/athlete/${sale.athlete_id}`}>
+                          <img
+                            src={athlete.avatar}
+                            alt={athlete?.name || 'Atleta'}
+                            className="w-12 h-12 rounded-full object-cover cursor-pointer hover:ring-2 hover:ring-primary transition-all"
+                          />
+                        </Link>
+                      )}
+                      <div>
+                        <h4 className="font-semibold">{athlete?.name || 'Atleta'}</h4>
+                        <p className="text-sm text-muted-foreground">
+                          {sale.quantity} tokens • Preço mínimo: R$ {sale.limit_price.toFixed(2)}
+                        </p>
+                        <p className="text-xs text-muted-foreground">Criada em {createdDate}</p>
+                      </div>
                     </div>
-                    <Button variant="outline" size="sm" onClick={() => handleCancelPending(sale.id, true)} disabled={cancellingId === sale.id}>{cancellingId === sale.id ? 'A cancelar...' : 'Cancelar Venda'}</Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleCancelPendingSale(sale.id)}
+                      disabled={cancellingSaleId === sale.id}
+                    >
+                      {cancellingSaleId === sale.id ? 'Cancelando...' : 'Cancelar venda'}
+                    </Button>
                   </div>
                 );
               })}
@@ -209,35 +491,69 @@ export function SponsorPanel({ userId }: { userId: string }) {
         </Card>
       )}
 
-      {/* Carteira de Ativos */}
-      <Card className="mb-6 border-primary/20 shadow-md">
-        <CardHeader><CardTitle>Meus Ativos</CardTitle></CardHeader>
+      {/* Minha Carteira */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>Minha Carteira</CardTitle>
+          <CardDescription>Resumo dos seus ativos consolidados por atleta</CardDescription>
+        </CardHeader>
         <CardContent>
-          {tokens.length === 0 ? <p className="text-muted-foreground text-center py-12 border-2 border-dashed rounded-lg bg-muted/20">A sua carteira está vazia.</p> : (
+          {walletItems.length === 0 ? (
+            <p className="text-muted-foreground text-center py-8">
+              Sua carteira está vazia.
+            </p>
+          ) : (
             <div className="space-y-4">
-              {tokens.map((item) => {
-                const info = getAssetInfo(item.asset_id);
-                if (!info) return null;
-                const currentValue = item.quantity * info.currentPrice;
-                const priceChange = ((info.currentPrice - item.average_purchase_price) / item.average_purchase_price) * 100;
+              {walletItems.map((item) => {
+                const athlete = getAthleteInfo(item.athlete_id);
+                if (!athlete) return null;
+
+                // Cálculos da carteira consolidada
+                const avgPrice = item.totalInvested / item.totalQuantity;
+                const currentValue = item.totalQuantity * athlete.tokenPrice;
+                const priceChange = ((athlete.tokenPrice - avgPrice) / avgPrice) * 100;
 
                 return (
-                  <div key={item.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 border rounded-lg bg-card hover:border-primary/50 transition-colors gap-4">
+                  <div
+                    key={item.athlete_id}
+                    className="flex items-center justify-between p-4 border rounded-lg bg-card hover:bg-accent/50 transition-colors"
+                  >
                     <div className="flex items-center gap-4">
-                      <Link to={`/asset/${item.asset_id}`} className="shrink-0">
-                        {info.imageUrl ? <img src={info.imageUrl} className="w-16 h-12 rounded-md object-cover" /> : <div className="w-16 h-12 rounded-md bg-muted flex items-center justify-center"><ImageIcon className="w-6 h-6 text-muted-foreground/50" /></div>}
+                      <Link to={`/athlete/${item.athlete_id}`}>
+                        <img
+                          src={athlete.avatar}
+                          alt={athlete.name}
+                          className="w-12 h-12 rounded-full object-cover cursor-pointer hover:ring-2 hover:ring-primary transition-all"
+                        />
                       </Link>
                       <div>
-                        <h4 className="font-semibold line-clamp-1">{info.title}</h4>
-                        <p className="text-sm text-muted-foreground mt-0.5">{item.quantity} cotas • PM: R$ {item.average_purchase_price.toFixed(2)}</p>
+                        <h4 className="font-semibold">{athlete.name}</h4>
+                        <p className="text-sm text-muted-foreground">
+                          {item.totalQuantity} tokens • Preço Atual: R$ {athlete.tokenPrice.toFixed(2)}
+                        </p>
                       </div>
                     </div>
-                    <div className="flex items-center justify-between sm:justify-end gap-6 w-full sm:w-auto">
-                      <div className="text-right shrink-0">
+                    <div className="flex items-center gap-4">
+                      <div className="text-right">
                         <p className="font-semibold text-lg">R$ {currentValue.toFixed(2)}</p>
-                        <div className="flex items-center gap-1 justify-end mt-0.5"><Badge variant={priceChange >= 0 ? "default" : "destructive"} className="text-[10px] px-1.5 py-0 h-4">{priceChange >= 0 ? '+' : ''}{priceChange.toFixed(2)}%</Badge></div>
+                        <div className="flex items-center gap-1 justify-end">
+                          <Badge variant={priceChange >= 0 ? "default" : "destructive"} className="text-xs">
+                            {priceChange >= 0 ? '+' : ''}{priceChange.toFixed(2)}%
+                          </Badge>
+                          {priceChange >= 0 ? (
+                            <TrendingUp className="w-4 h-4 text-green-500" />
+                          ) : (
+                            <TrendingDown className="w-4 h-4 text-red-500" />
+                          )}
+                        </div>
                       </div>
-                      <Button variant="default" size="sm" onClick={() => openSellDialog(item)}>Vender</Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => openSellDialog(item)}
+                      >
+                        Vender
+                      </Button>
                     </div>
                   </div>
                 );
@@ -247,52 +563,134 @@ export function SponsorPanel({ userId }: { userId: string }) {
         </CardContent>
       </Card>
 
-      {/* Modal de Venda */}
+      {/* Histórico de Transações */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Histórico de Transações</CardTitle>
+          <CardDescription>Seu histórico completo de compras e vendas</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {transactions.length === 0 ? (
+            <p className="text-muted-foreground text-center py-8">
+              Você ainda não realizou nenhuma transação. Visite o marketplace para começar!
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {transactions.map((tx) => {
+                const athlete = getAthleteInfo(tx.athlete_id);
+                if (!athlete) return null;
+
+                const totalValue = tx.quantity * tx.price;
+                const txDate = new Date(tx.created_at).toLocaleDateString('pt-BR', {
+                  day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                });
+                const isBuy = tx.type === 'buy';
+                const isPartial = tx.original_quantity && tx.quantity < tx.original_quantity;
+
+                return (
+                  <div
+                    key={tx.id}
+                    className="flex items-center justify-between p-4 border rounded-lg bg-card hover:bg-accent/50 transition-colors"
+                  >
+                    <div className="flex items-center gap-4">
+                      <Link to={`/athlete/${tx.athlete_id}`}>
+                        <img
+                          src={athlete.avatar}
+                          alt={athlete.name}
+                          className="w-12 h-12 rounded-full object-cover cursor-pointer hover:ring-2 hover:ring-primary transition-all"
+                        />
+                      </Link>
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <h4 className="font-semibold">{athlete.name}</h4>
+                          <Badge variant={isBuy ? "default" : "destructive"} className={isBuy ? "bg-green-600 hover:bg-green-700 text-white" : ""}>
+                            {isBuy ? 'COMPRA' : 'VENDA'}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-2 mt-1">
+                          <p className="text-sm text-muted-foreground">
+                            {tx.quantity} tokens • R$ {tx.price.toFixed(2)} / token
+                          </p>
+                          {isPartial && (
+                            <span className="text-[10px] font-medium bg-amber-500/20 text-amber-600 px-2 py-0.5 rounded-full">
+                              Parcial ({tx.quantity} de {tx.original_quantity})
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Data: {txDate}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className="text-right">
+                        <p className="text-sm text-muted-foreground mb-1">Total</p>
+                        <p className={`font-semibold text-lg ${isBuy ? 'text-foreground' : 'text-destructive'}`}>
+                          {isBuy ? '-' : '+'} R$ {totalValue.toFixed(2)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Sell Dialog */}
       <Dialog open={sellDialogOpen} onOpenChange={setSellDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Vender Cotas</DialogTitle>
-            <DialogDescription>Defina a quantidade e o preço de venda das suas cotas.</DialogDescription>
+            <DialogTitle>Vender Tokens</DialogTitle>
+            <DialogDescription>
+              {selectedWalletItem && getAthleteInfo(selectedWalletItem.athlete_id)
+                ? `Vender tokens de ${getAthleteInfo(selectedWalletItem.athlete_id).name}`
+                : 'Defina o preço e a quantidade'}
+            </DialogDescription>
           </DialogHeader>
-
           {selectedWalletItem && (
-            <div className="space-y-4 py-4">
-              <div className="p-3 bg-muted/50 rounded-lg mb-4">
-                <p className="text-sm text-muted-foreground">Disponível na sua carteira:</p>
-                <p className="font-bold text-lg">{selectedWalletItem.quantity} cotas</p>
-              </div>
-
+            <div className="space-y-4 py-2">
+              <p className="text-sm text-muted-foreground">
+                Você possui <span className="font-semibold text-foreground">{selectedWalletItem.totalQuantity}</span> tokens
+              </p>
               <div className="space-y-2">
-                <Label>Quantidade a Vender</Label>
+                <Label>Quantidade para vender</Label>
                 <Input
-                  type="number" min="1" max={selectedWalletItem.quantity}
+                  type="number"
+                  min={1}
+                  max={selectedWalletItem.totalQuantity}
                   value={sellQuantity}
-                  onChange={(e) => setSellQuantity(Math.max(1, Math.min(selectedWalletItem.quantity, parseInt(e.target.value) || 1)))}
+                  onChange={(e) => setSellQuantity(Math.max(1, Math.min(selectedWalletItem.totalQuantity, parseInt(e.target.value) || 1)))}
                 />
               </div>
-
               <div className="space-y-2">
-                <Label>Preço por Cota (R$)</Label>
+                <Label>Preço por token (R$)</Label>
                 <Input
-                  type="number" min="0.01" step="0.01"
+                  type="number"
+                  min="0.01"
+                  step="0.01"
                   value={sellPrice}
                   onChange={(e) => setSellPrice(e.target.value)}
                 />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Se vender a R$ {getAssetInfo(selectedWalletItem.asset_id)?.currentPrice?.toFixed(2)} ou menos, a venda é imediata. Um valor maior cria uma "Ordem em Espera".
+                <p className="text-xs text-muted-foreground">
+                  Preço atual: R$ {getAthleteInfo(selectedWalletItem.athlete_id)?.tokenPrice?.toFixed(2)}.
+                  Venda abaixo ou igual: imediata. Acima: ordem em espera.
                 </p>
               </div>
-
-              <div className="p-4 rounded-lg bg-secondary/50 border border-border mt-2">
-                <p className="text-sm text-muted-foreground mb-1">Total a Receber</p>
-                <p className="text-2xl font-bold text-primary">R$ {(sellQuantity * (parseFloat(sellPrice) || 0)).toFixed(2)}</p>
+              <div className="p-4 rounded-lg bg-secondary/50 border border-border">
+                <p className="text-sm text-muted-foreground mb-1">Total da venda</p>
+                <p className="text-2xl font-bold">
+                  R$ {(sellQuantity * (parseFloat(sellPrice) || 0)).toFixed(2)}
+                </p>
               </div>
             </div>
           )}
-
           <DialogFooter>
             <Button variant="outline" onClick={() => setSellDialogOpen(false)}>Cancelar</Button>
-            <Button onClick={handleSell} disabled={selling}>{selling ? 'Processando...' : 'Confirmar Venda'}</Button>
+            <Button onClick={handleSell} disabled={selling}>
+              {selling ? 'Processando...' : 'Confirmar Venda'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

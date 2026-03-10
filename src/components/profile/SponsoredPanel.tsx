@@ -1,16 +1,15 @@
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/lib/supabase";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Coins, Plus, DollarSign, Pencil, Loader2, UploadCloud, User, X, Trash2, Video, Image as ImageIcon } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Coins, Plus, DollarSign, Pencil, Loader2, UploadCloud, User, X } from "lucide-react";
 import Cropper from 'react-easy-crop';
 import { toast } from "sonner";
-import { Asset } from "@/types/athlete"; // Tipagem nova que criamos na Fase 1
 
 // --- FUNÇÕES AJUDANTES PARA O CORTE DA IMAGEM ---
 const createImage = (url: string): Promise<HTMLImageElement> =>
@@ -28,20 +27,48 @@ const getCroppedImg = async (imageSrc: string, pixelCrop: any): Promise<Blob | n
   const ctx = canvas.getContext("2d");
 
   if (!ctx) return null;
+
   canvas.width = pixelCrop.width;
   canvas.height = pixelCrop.height;
 
   ctx.drawImage(
     image,
-    pixelCrop.x, pixelCrop.y, pixelCrop.width, pixelCrop.height,
-    0, 0, pixelCrop.width, pixelCrop.height
+    pixelCrop.x,
+    pixelCrop.y,
+    pixelCrop.width,
+    pixelCrop.height,
+    0,
+    0,
+    pixelCrop.width,
+    pixelCrop.height
   );
 
   return new Promise((resolve) => {
-    canvas.toBlob((blob) => resolve(blob), "image/jpeg", 0.9);
+    canvas.toBlob((blob) => {
+      resolve(blob);
+    }, "image/jpeg", 0.9);
   });
 };
 // ------------------------------------------------
+
+interface AthleteToken {
+  id: string;
+  athlete_id: string;
+  total_tokens: number;
+  available_tokens: number;
+  price_per_token: number;
+  athlete_name?: string;
+  sport?: string;
+  description?: string;
+  avatar_url?: string;
+  achievements?: string[];
+  social_twitter?: string;
+  social_instagram?: string;
+  social_twitch?: string;
+  social_youtube?: string;
+  featured_video?: string;
+  gallery_urls?: string[];
+}
 
 interface SponsoredPanelProps {
   userId: string;
@@ -49,25 +76,13 @@ interface SponsoredPanelProps {
 }
 
 export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
-  // Estados do Perfil (Storefront)
-  const [athleteProfile, setAthleteProfile] = useState<any>(null);
+  const [athleteToken, setAthleteToken] = useState<AthleteToken | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isEditProfileDialogOpen, setIsEditProfileDialogOpen] = useState(false);
+  const [newTokens, setNewTokens] = useState(100);
+  const [newPrice, setNewPrice] = useState(10);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
-  // Estados dos Ativos (Assets)
-  const [assets, setAssets] = useState<Asset[]>([]);
-  const [isCreateAssetDialogOpen, setIsCreateAssetDialogOpen] = useState(false);
-  const [creatingAsset, setCreatingAsset] = useState(false);
-
-  // Formulário de Novo Ativo
-  const [assetTitle, setAssetTitle] = useState("");
-  const [assetDescription, setAssetDescription] = useState("");
-  const [assetYoutubeUrl, setAssetYoutubeUrl] = useState("");
-  const [assetTokens, setAssetTokens] = useState(100);
-  const [assetPrice, setAssetPrice] = useState(10);
-  const [assetImageFile, setAssetImageFile] = useState<File | null>(null);
-
-  // Estados do Crop e Perfil
+  // Estados do Crop, Upload e Arquivo
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [imageToCrop, setImageToCrop] = useState<string | null>(null);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
@@ -75,13 +90,12 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
   const [selectedFileName, setSelectedFileName] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const assetImageInputRef = useRef<HTMLInputElement>(null);
   const [featuredVideo, setFeaturedVideo] = useState("");
   const [galleryUrls, setGalleryUrls] = useState<string[]>([]);
   const [uploadingGallery, setUploadingGallery] = useState(false);
   const galleryInputRef = useRef<HTMLInputElement>(null);
 
-  // Campos do Perfil
+  // Profile fields
   const [athleteName, setAthleteName] = useState("");
   const [sport, setSport] = useState("");
   const [description, setDescription] = useState("");
@@ -93,107 +107,180 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
   const [youtube, setYoutube] = useState("");
 
   useEffect(() => {
-    loadAthleteProfileAndAssets();
+    loadAthleteTokens();
   }, [userId]);
 
-  const loadAthleteProfileAndAssets = async () => {
+  const loadAthleteTokens = async () => {
     try {
-      // 1. Carrega o Perfil (usando a tabela antiga como base de perfil)
-      const { data: profileData, error: profileError } = await supabase
+      const { data, error } = await supabase
         .from('athlete_tokens')
         .select('*')
         .eq('user_id', userId)
         .maybeSingle();
 
-      if (profileError) throw profileError;
+      if (error) throw error;
 
-      setAthleteProfile(profileData);
-      if (profileData) {
-        setAthleteName(profileData.athlete_name || "");
-        setSport(profileData.sport || "");
-        setDescription(profileData.description || "");
-        setAvatarUrl(profileData.avatar_url || "");
-        setAchievements(profileData.achievements ? profileData.achievements.join('\n') : "");
-        setTwitter(profileData.social_twitter || "");
-        setInstagram(profileData.social_instagram || "");
-        setTwitch(profileData.social_twitch || "");
-        setYoutube(profileData.social_youtube || "");
-        setFeaturedVideo(profileData.featured_video || "");
-        setGalleryUrls(profileData.gallery_urls || []);
+      setAthleteToken(data);
+
+      if (data) {
+        setAthleteName(data.athlete_name || "");
+        setSport(data.sport || "");
+        setDescription(data.description || "");
+        setAvatarUrl(data.avatar_url || "");
+        setAchievements(data.achievements ? data.achievements.join('\n') : "");
+        setTwitter(data.social_twitter || "");
+        setInstagram(data.social_instagram || "");
+        setTwitch(data.social_twitch || "");
+        setYoutube(data.social_youtube || "");
+        setFeaturedVideo(data.featured_video || "");
+        setGalleryUrls(data.gallery_urls || []);
       }
-
-      // 2. Carrega os Ativos criados por este atleta
-      const { data: assetsData, error: assetsError } = await supabase
-        .from('athlete_assets')
-        .select('*')
-        .eq('athlete_id', userId)
-        .order('created_at', { ascending: false });
-
-      if (assetsError) throw assetsError;
-
-      if (assetsData) {
-        const mappedAssets: Asset[] = assetsData.map(a => ({
-          id: a.id,
-          athleteId: a.athlete_id,
-          title: a.title,
-          description: a.description,
-          imageUrl: a.image_url,
-          youtubeUrl: a.youtube_url,
-          totalTokens: a.total_tokens,
-          availableTokens: a.available_tokens,
-          initialPrice: Number(a.initial_price),
-          currentPrice: Number(a.current_price),
-          priceChange: Number(a.price_change_24h || 0),
-          marketCap: Number(a.market_cap || 0),
-          volume24h: Number(a.volume_24h || 0),
-          createdAt: new Date(a.created_at)
-        }));
-        setAssets(mappedAssets);
-      } else {
-        setAssets([]);
-      }
-
     } catch (error) {
-      console.error('Erro ao carregar dados:', error);
+      console.error('Error loading athlete tokens:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  // --- FUNÇÕES DE PERFIL (MANTIDAS E ADAPTADAS) ---
   const onFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    // Mesma lógica de antes para avatar
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0];
+      if (!file.type.startsWith('image/')) {
+        toast.error('Por favor, envie apenas imagens (JPG, PNG).');
+        return;
+      }
+
       setSelectedFileName(file.name);
+
       const reader = new FileReader();
       reader.readAsDataURL(file);
-      reader.onload = () => { setImageToCrop(reader.result as string); setZoom(1); };
+      reader.onload = () => {
+        setImageToCrop(reader.result as string);
+        setZoom(1);
+      };
+
       e.target.value = '';
+    }
+  };
+
+  const onCropComplete = (croppedArea: any, croppedAreaPixels: any) => {
+    setCroppedAreaPixels(croppedAreaPixels);
+  };
+
+  const onGalleryFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      try {
+        setUploadingGallery(true);
+        const file = e.target.files[0];
+        if (!file.type.startsWith('image/')) {
+          toast.error('Por favor, envie apenas imagens.');
+          return;
+        }
+
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${userId}-gallery-${Date.now()}.${fileExt}`;
+        const filePath = `${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('athlete_gallery')
+          .upload(filePath, file);
+
+        if (uploadError) throw uploadError;
+
+        const { data } = supabase.storage.from('athlete_gallery').getPublicUrl(filePath);
+
+        setGalleryUrls(prev => [...prev, data.publicUrl]);
+        toast.success('Imagem adicionada à galeria!');
+      } catch (error) {
+        console.error('Erro no upload:', error);
+        toast.error('Erro ao enviar a imagem.');
+      } finally {
+        setUploadingGallery(false);
+        e.target.value = '';
+      }
     }
   };
 
   const handleCropConfirm = async () => {
     if (!imageToCrop || !croppedAreaPixels) return;
+
     try {
       setUploadingAvatar(true);
+
       const croppedBlob = await getCroppedImg(imageToCrop, croppedAreaPixels);
       if (!croppedBlob) throw new Error("Falha ao gerar o corte da imagem.");
-      const filePath = `${userId}-avatar-${Date.now()}.jpg`;
-      const { error: uploadError } = await supabase.storage.from('avatars').upload(filePath, croppedBlob, { contentType: 'image/jpeg' });
+
+      const fileName = `${userId}-avatar-${Date.now()}.jpg`;
+      const filePath = `${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(filePath, croppedBlob, {
+          contentType: 'image/jpeg'
+        });
+
       if (uploadError) throw uploadError;
+
       const { data } = supabase.storage.from('avatars').getPublicUrl(filePath);
+
       setAvatarUrl(data.publicUrl);
-      toast.success('Foto cortada e carregada!');
+      toast.success('Foto cortada e carregada com sucesso!');
       setImageToCrop(null);
-    } catch (error) {
-      toast.error('Erro ao enviar a imagem.');
+    } catch (error: any) {
+      console.error('Erro no upload:', error);
+      toast.error('Erro ao enviar a imagem. Tente novamente.');
     } finally {
       setUploadingAvatar(false);
     }
   };
 
-  const saveProfile = async () => {
+  const createTokens = async () => {
+    try {
+      if (!athleteName || !sport || !description) {
+        toast.error('Preencha todos os campos obrigatórios');
+        return;
+      }
+
+      const clampedTokens = Math.min(Math.max(Math.floor(newTokens), 1), 100);
+      const athleteId = `athlete-${userId.substring(0, 8)}`;
+      const achievementsArray = achievements.split('\n').filter(a => a.trim());
+      const marketCap = clampedTokens * newPrice;
+
+      const { error } = await supabase
+        .from('athlete_tokens')
+        .insert({
+          athlete_id: athleteId,
+          user_id: userId,
+          total_tokens: clampedTokens,
+          available_tokens: clampedTokens,
+          price_per_token: newPrice,
+          athlete_name: athleteName,
+          sport: sport,
+          description: description,
+          avatar_url: avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${athleteName}`,
+          achievements: achievementsArray,
+          social_twitter: twitter || null,
+          social_instagram: instagram || null,
+          social_twitch: twitch || null,
+          social_youtube: youtube || null,
+          market_cap: marketCap,
+          volume_24h: 0,
+          price_change_24h: 0,
+          featured_video: featuredVideo || null,
+          gallery_urls: galleryUrls,
+        });
+
+      if (error) throw error;
+
+      toast.success('Tokens criados com sucesso! Você já aparece no marketplace!');
+      loadAthleteTokens();
+    } catch (error: any) {
+      console.error('Error creating tokens:', error);
+      toast.error(error.message || 'Erro ao criar tokens');
+    }
+  };
+
+  const updateProfile = async () => {
     try {
       if (!athleteName || !sport || !description) {
         toast.error('Preencha todos os campos obrigatórios');
@@ -201,261 +288,506 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
       }
 
       const achievementsArray = achievements.split('\n').filter(a => a.trim());
-      const profileData = {
-        athlete_name: athleteName,
-        sport: sport,
-        description: description,
-        avatar_url: avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${athleteName}`,
-        achievements: achievementsArray,
-        social_twitter: twitter || null,
-        social_instagram: instagram || null,
-        social_twitch: twitch || null,
-        social_youtube: youtube || null,
-        featured_video: featuredVideo || null,
-        gallery_urls: galleryUrls,
-        // Mantemos valores default para os campos antigos não quebrarem
-        user_id: userId,
-        athlete_id: `athlete-${userId.substring(0, 8)}`,
-        total_tokens: 1,
-        available_tokens: 1,
-        price_per_token: 0
-      };
 
-      if (athleteProfile) {
-        const { error } = await supabase.from('athlete_tokens').update(profileData).eq('id', athleteProfile.id);
-        if (error) throw error;
-        toast.success('Perfil atualizado com sucesso!');
-      } else {
-        const { error } = await supabase.from('athlete_tokens').insert([profileData]);
-        if (error) throw error;
-        toast.success('Perfil criado! Você já pode criar ativos.');
-      }
-      setIsEditProfileDialogOpen(false);
-      loadAthleteProfileAndAssets();
-    } catch (error: any) {
-      toast.error(error.message || 'Erro ao salvar perfil');
-    }
-  };
+      const { error } = await supabase
+        .from('athlete_tokens')
+        .update({
+          athlete_name: athleteName,
+          sport: sport,
+          description: description,
+          avatar_url: avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${athleteName}`,
+          achievements: achievementsArray,
+          social_twitter: twitter || null,
+          social_instagram: instagram || null,
+          social_twitch: twitch || null,
+          social_youtube: youtube || null,
+          featured_video: featuredVideo || null,
+          gallery_urls: galleryUrls,
+        })
+        .eq('id', athleteToken?.id);
 
-  // --- FUNÇÕES DE ATIVOS (NOVAS) ---
-  const handleCreateAsset = async () => {
-    if (!assetTitle || !assetDescription || !assetYoutubeUrl || !assetImageFile) {
-      toast.error('Preencha todos os campos e selecione uma imagem para o ativo.');
-      return;
-    }
-
-    try {
-      setCreatingAsset(true);
-
-      // 1. Upload da imagem do ativo
-      const fileExt = assetImageFile.name.split('.').pop();
-      const filePath = `${userId}-asset-${Date.now()}.${fileExt}`;
-      const { error: uploadError } = await supabase.storage
-        .from('assets-images')
-        .upload(filePath, assetImageFile);
-
-      if (uploadError) throw uploadError;
-      const { data: imgData } = supabase.storage.from('assets-images').getPublicUrl(filePath);
-
-      // 2. Salvar no banco
-      const { error: dbError } = await supabase.from('athlete_assets').insert({
-        athlete_id: userId,
-        title: assetTitle,
-        description: assetDescription,
-        image_url: imgData.publicUrl,
-        youtube_url: assetYoutubeUrl,
-        total_tokens: assetTokens,
-        available_tokens: assetTokens,
-        initial_price: assetPrice,
-        current_price: assetPrice
-      });
-
-      if (dbError) throw dbError;
-
-      toast.success('Ativo criado com sucesso!');
-      setIsCreateAssetDialogOpen(false);
-
-      // Limpar formulário
-      setAssetTitle(""); setAssetDescription(""); setAssetYoutubeUrl("");
-      setAssetImageFile(null); setAssetTokens(100); setAssetPrice(10);
-
-      loadAthleteProfileAndAssets();
-    } catch (error: any) {
-      console.error(error);
-      toast.error('Erro ao criar ativo.');
-    } finally {
-      setCreatingAsset(false);
-    }
-  };
-
-  const handleDeleteAsset = async (assetId: string) => {
-    try {
-      const { error } = await supabase.from('athlete_assets').delete().eq('id', assetId);
       if (error) throw error;
-      toast.success('Ativo excluído com sucesso!');
-      loadAthleteProfileAndAssets();
-    } catch (error) {
-      toast.error('Erro ao excluir. Verifique se o ativo já possui compradores.');
+
+      toast.success('Perfil atualizado com sucesso!');
+      setIsEditDialogOpen(false);
+      loadAthleteTokens();
+    } catch (error: any) {
+      console.error('Error updating profile:', error);
+      toast.error(error.message || 'Erro ao atualizar perfil');
     }
   };
 
-  if (loading) return <div>Carregando...</div>;
+  const generateMoreTokens = async () => {
+    if (!athleteToken) return;
+
+    try {
+      const remaining = 100 - athleteToken.total_tokens;
+
+      if (remaining <= 0) {
+        toast.error('Você já atingiu o limite de 100 tokens.');
+        return;
+      }
+
+      if (newTokens > remaining) {
+        toast.error(`Você pode gerar no máximo mais ${remaining} tokens.`);
+        setNewTokens(remaining);
+        return;
+      }
+
+      if (newTokens <= 0) {
+        toast.error('A quantidade deve ser maior que zero.');
+        setNewTokens(1);
+        return;
+      }
+
+      const toGenerate = Math.floor(newTokens);
+      const newTotal = athleteToken.total_tokens + toGenerate;
+      const newMarketCap = newTotal * athleteToken.price_per_token;
+
+      const { error } = await supabase
+        .from('athlete_tokens')
+        .update({
+          total_tokens: newTotal,
+          available_tokens: athleteToken.available_tokens + toGenerate,
+          market_cap: newMarketCap
+        })
+        .eq('id', athleteToken.id);
+
+      if (error) throw error;
+
+      toast.success(`${toGenerate} novos tokens gerados!`);
+      setNewTokens(1);
+      loadAthleteTokens();
+    } catch (error: any) {
+      console.error('Error generating tokens:', error);
+      toast.error(error.message || 'Erro ao gerar tokens');
+    }
+  };
+
+  if (loading) {
+    return <div>Carregando...</div>;
+  }
+
+  // Funções de Renderização em linha (Para evitar que os Inputs percam o foco ao digitar)
+  const renderAvatarUploadArea = () => (
+    <div className="flex flex-col gap-4">
+      <Label className="text-base font-semibold">Foto de Perfil</Label>
+      <div className="flex flex-col sm:flex-row sm:items-center gap-6">
+        <div className="relative w-32 h-32 sm:w-40 sm:h-40 rounded-full overflow-hidden border-2 border-dashed border-border flex items-center justify-center bg-muted shrink-0 shadow-sm">
+          {avatarUrl ? (
+            <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
+          ) : (
+            <User className="w-12 h-12 text-muted-foreground opacity-50" />
+          )}
+          {uploadingAvatar && (
+            <div className="absolute inset-0 bg-background/60 flex items-center justify-center backdrop-blur-sm">
+              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            </div>
+          )}
+        </div>
+        <div className="flex-1">
+          <input
+            type="file"
+            accept="image/*"
+            onChange={onFileChange}
+            disabled={uploadingAvatar}
+            className="hidden"
+            ref={fileInputRef}
+          />
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploadingAvatar}
+            >
+              <UploadCloud className="w-4 h-4 mr-2" />
+              Escolher foto
+            </Button>
+            <span className="text-sm font-medium text-muted-foreground truncate max-w-[200px] sm:max-w-[300px]">
+              {selectedFileName ? selectedFileName : "Nenhum arquivo escolhido"}
+            </span>
+          </div>
+          <p className="text-xs text-muted-foreground mt-3">
+            Formatos aceitos: JPG ou PNG. Recomendado: Imagem com rosto centralizado.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderGalleryUploadArea = () => (
+    <div className="flex flex-col gap-4 border-t pt-4 mt-2">
+      <div>
+        <Label className="text-base font-semibold">Galeria & Vídeo (Opcional)</Label>
+        <p className="text-sm text-muted-foreground">Mostre mais do seu trabalho para seus investidores.</p>
+      </div>
+
+      <div>
+        <Label htmlFor="featuredVideo">Link para vídeo de Destaque</Label>
+        <Input
+          id="featuredVideo"
+          placeholder="Ex: https://www.youtube.com/watch?v=..."
+          value={featuredVideo}
+          onChange={(e) => setFeaturedVideo(e.target.value)}
+        />
+      </div>
+
+      <div className="space-y-3">
+        <Label>Fotos da Galeria</Label>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          {galleryUrls.map((url, index) => (
+            <div key={index} className="relative aspect-square rounded-md overflow-hidden border border-border group">
+              <img src={url} alt={`Galeria ${index}`} className="w-full h-full object-cover" />
+              <button
+                type="button"
+                onClick={() => setGalleryUrls(prev => prev.filter((_, i) => i !== index))}
+                className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </div>
+          ))}
+
+          {galleryUrls.length < 6 && (
+            <div
+              onClick={() => !uploadingGallery && galleryInputRef.current?.click()}
+              className="aspect-square rounded-md border-2 border-dashed border-border flex flex-col items-center justify-center cursor-pointer hover:bg-muted transition-colors"
+            >
+              {uploadingGallery ? (
+                <Loader2 className="w-6 h-6 animate-spin text-primary" />
+              ) : (
+                <>
+                  <Plus className="w-6 h-6 text-muted-foreground mb-1" />
+                  <span className="text-xs text-muted-foreground">Adicionar foto</span>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+        <input
+          type="file"
+          accept="image/*"
+          className="hidden"
+          ref={galleryInputRef}
+          onChange={onGalleryFileChange}
+          disabled={uploadingGallery}
+        />
+      </div>
+    </div>
+  );
+
+  const soldTokens = athleteToken?.total_tokens ? athleteToken.total_tokens - athleteToken.available_tokens : 0;
+  const soldPercentage = athleteToken?.total_tokens ? (soldTokens / athleteToken.total_tokens) * 100 : 0;
+  const revenue = athleteToken?.price_per_token ? soldTokens * athleteToken.price_per_token : 0;
 
   return (
     <div className="space-y-6">
 
-      {/* SE O USUÁRIO AINDA NÃO TEM PERFIL */}
-      {!athleteProfile ? (
+      {/* MODAL DE CORTE DE IMAGEM */}
+      <Dialog open={!!imageToCrop} onOpenChange={(open) => !open && !uploadingAvatar && setImageToCrop(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Cortar Foto de Perfil</DialogTitle>
+            <DialogDescription>
+              Ajuste sua foto para que ela se encaixe perfeitamente no formato redondo.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="relative w-full h-[300px] bg-black sm:h-[400px] rounded-md overflow-hidden">
+            {imageToCrop && (
+              <Cropper
+                image={imageToCrop}
+                crop={crop}
+                zoom={zoom}
+                aspect={1}
+                cropShape="round"
+                showGrid={false}
+                onCropChange={setCrop}
+                onCropComplete={onCropComplete}
+                onZoomChange={setZoom}
+              />
+            )}
+          </div>
+
+          <div className="py-4">
+            <Label>Zoom</Label>
+            <input
+              type="range"
+              value={zoom}
+              min={1}
+              max={3}
+              step={0.1}
+              onChange={(e) => setZoom(Number(e.target.value))}
+              className="w-full mt-2 cursor-ew-resize accent-primary"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setImageToCrop(null)} disabled={uploadingAvatar}>
+              Cancelar
+            </Button>
+            <Button onClick={handleCropConfirm} disabled={uploadingAvatar}>
+              {uploadingAvatar ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+              {uploadingAvatar ? 'Salvando...' : 'Cortar e Salvar'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* TELA DE CRIAÇÃO DO ATLETA */}
+      {!athleteToken ? (
         <Card>
           <CardHeader>
-            <CardTitle>Crie seu Perfil no Marketplace</CardTitle>
-            <CardDescription>Para criar ativos negociáveis, primeiro defina como sua vitrine será exibida.</CardDescription>
+            <CardTitle>Criar Seu Perfil de Atleta</CardTitle>
+            <CardDescription>
+              Preencha seus dados para aparecer no marketplace e começar a ser patrocinado!
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label>Nome do Atleta *</Label>
-                <Input value={athleteName} onChange={(e) => setAthleteName(e.target.value)} />
+                <Label htmlFor="athleteName">Nome do Atleta *</Label>
+                <Input
+                  id="athleteName"
+                  value={athleteName}
+                  onChange={(e) => setAthleteName(e.target.value)}
+                  placeholder="Seu nome artístico"
+                />
               </div>
               <div>
-                <Label>Modalidade *</Label>
-                <Input value={sport} onChange={(e) => setSport(e.target.value)} placeholder="Ex: Futebol, E-Sports" />
+                <Label htmlFor="sport">Modalidade *</Label>
+                <Select value={sport} onValueChange={setSport}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="E-Sports">E-Sports</SelectItem>
+                    <SelectItem value="Futebol">Futebol</SelectItem>
+                    <SelectItem value="MMA">MMA</SelectItem>
+                    <SelectItem value="Atletismo">Atletismo</SelectItem>
+                    <SelectItem value="Basquete">Basquete</SelectItem>
+                    <SelectItem value="Vôlei">Vôlei</SelectItem>
+                    <SelectItem value="Natação">Natação</SelectItem>
+                    <SelectItem value="Outros">Outros</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
+
             <div>
-              <Label>Descrição da sua Trajetória *</Label>
-              <Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} />
+              <Label htmlFor="description">Descrição *</Label>
+              <Textarea
+                id="description"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="Conte sua história, suas especialidades..."
+                rows={3}
+              />
             </div>
-            <Button onClick={saveProfile} className="w-full mt-4">Criar Vitrine</Button>
+
+            {renderAvatarUploadArea()}
+            {renderGalleryUploadArea()}
+
+            <div>
+              <Label htmlFor="achievements">Conquistas (uma por linha)</Label>
+              <Textarea
+                id="achievements"
+                value={achievements}
+                onChange={(e) => setAchievements(e.target.value)}
+                placeholder="Campeão Regional 2023&#10;Top 10 Nacional&#10;500+ horas de jogo"
+                rows={3}
+              />
+            </div>
+
+            <div className="border-t pt-4">
+              <h3 className="font-semibold mb-3">Redes Sociais (opcional)</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <Input placeholder="Twitter/X" value={twitter} onChange={(e) => setTwitter(e.target.value)} />
+                <Input placeholder="Instagram" value={instagram} onChange={(e) => setInstagram(e.target.value)} />
+                <Input placeholder="Twitch" value={twitch} onChange={(e) => setTwitch(e.target.value)} />
+                <Input placeholder="YouTube" value={youtube} onChange={(e) => setYoutube(e.target.value)} />
+              </div>
+            </div>
+
+            <div className="border-t pt-4">
+              <h3 className="font-semibold mb-3">Configuração de Tokens</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="tokens">Quantidade de Tokens *</Label>
+                  <Input
+                    id="tokens"
+                    type="number"
+                    value={newTokens}
+                    onChange={(e) => setNewTokens(Number(e.target.value))}
+                    min="1"
+                    max="100"
+                    step="1"
+                    onBlur={() => { if (newTokens > 100) setNewTokens(100); if (newTokens < 1) setNewTokens(1); }}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="price">Preço por Token (R$) *</Label>
+                  <Input
+                    id="price"
+                    type="number"
+                    value={newPrice}
+                    onChange={(e) => setNewPrice(Number(e.target.value))}
+                    min="0.01"
+                    step="0.01"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <Button onClick={createTokens} className="w-full" size="lg">
+              <Plus className="w-4 h-4 mr-2" />
+              Criar Perfil e Tokens
+            </Button>
           </CardContent>
         </Card>
       ) : (
         <>
-          {/* DASHBOARD DO ATLETA: PERFIL E ATIVOS */}
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-6 rounded-lg border shadow-sm">
-            <div className="flex items-center gap-4">
-              <img src={athleteProfile.avatar_url} alt="Avatar" className="w-16 h-16 rounded-full object-cover border" />
-              <div>
-                <h2 className="text-2xl font-bold">{athleteProfile.athlete_name}</h2>
-                <p className="text-muted-foreground">{athleteProfile.sport} • {assets.length} Ativos criados</p>
-              </div>
-            </div>
-            <Button onClick={() => setIsEditProfileDialogOpen(true)} variant="outline">
-              <Pencil className="w-4 h-4 mr-2" /> Editar Vitrine
-            </Button>
-          </div>
-
-          <div className="flex justify-between items-center mt-8 mb-4">
+          {/* TELA DE GERENCIAMENTO (ATLETA JÁ EXISTENTE) */}
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-card p-4 rounded-lg border shadow-sm">
             <div>
-              <h3 className="text-xl font-bold">Meus Ativos (Projetos)</h3>
-              <p className="text-sm text-muted-foreground">Estes são os ativos que os patrocinadores podem comprar frações.</p>
+              <h2 className="text-2xl font-bold flex items-center gap-2">
+                Visão Geral do seu Mercado
+              </h2>
+              <p className="text-muted-foreground">Aqui você acompanha o desempenho dos seus tokens.</p>
             </div>
-            <Button onClick={() => setIsCreateAssetDialogOpen(true)}>
-              <Plus className="w-4 h-4 mr-2" /> Novo Ativo
+            <Button onClick={() => setIsEditDialogOpen(true)} variant="outline">
+              <Pencil className="w-4 h-4 mr-2" />
+              Editar Perfil
             </Button>
           </div>
 
-          {/* LISTA DE ATIVOS */}
-          {assets.length === 0 ? (
-            <Card className="p-8 text-center text-muted-foreground bg-muted/20 border-dashed">
-              <p>Você ainda não criou nenhum ativo.</p>
-              <Button variant="link" onClick={() => setIsCreateAssetDialogOpen(true)}>Criar meu primeiro ativo</Button>
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <Card>
+              <CardHeader>
+                <CardDescription>Tokens Totais</CardDescription>
+                <CardTitle className="text-2xl flex items-center gap-2">
+                  <Coins className="w-5 h-5" />
+                  {athleteToken.total_tokens.toLocaleString()}
+                </CardTitle>
+              </CardHeader>
             </Card>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {assets.map((asset) => {
-                const soldTokens = asset.totalTokens - asset.availableTokens;
-                const canDelete = soldTokens === 0; // Regra de exclusão
+            <Card>
+              <CardHeader>
+                <CardDescription>Tokens Disponíveis</CardDescription>
+                <CardTitle className="text-2xl">{athleteToken.available_tokens.toLocaleString()}</CardTitle>
+              </CardHeader>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardDescription>Tokens Vendidos</CardDescription>
+                <CardTitle className="text-2xl">{soldTokens.toLocaleString()}</CardTitle>
+                <p className="text-xs text-muted-foreground">{soldPercentage.toFixed(1)}% vendido</p>
+              </CardHeader>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardDescription>Receita Total</CardDescription>
+                <CardTitle className="text-2xl flex items-center gap-2">
+                  <DollarSign className="w-5 h-5" />
+                  R$ {revenue.toFixed(2)}
+                </CardTitle>
+              </CardHeader>
+            </Card>
+          </div>
 
-                return (
-                  <Card key={asset.id} className="overflow-hidden flex flex-col">
-                    <div className="h-40 w-full bg-muted relative">
-                      {asset.imageUrl ? (
-                        <img src={asset.imageUrl} alt={asset.title} className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="flex items-center justify-center w-full h-full"><ImageIcon className="opacity-20 w-12 h-12" /></div>
-                      )}
-                    </div>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-lg line-clamp-1">{asset.title}</CardTitle>
-                      <CardDescription className="font-semibold text-primary">R$ {asset.currentPrice ? asset.currentPrice.toFixed(2) : '0.00'} / cota</CardDescription>
-                    </CardHeader>
-                    <CardContent className="flex-1 pb-2">
-                      <p className="text-sm text-muted-foreground mb-4 line-clamp-2">{asset.description}</p>
-                      <div className="flex justify-between text-sm mb-1">
-                        <span>Cotas vendidas:</span>
-                        <span className="font-medium">{soldTokens} / {asset.totalTokens}</span>
-                      </div>
-                      <div className="w-full bg-muted rounded-full h-2">
-                        <div className="bg-primary h-2 rounded-full" style={{ width: `${(soldTokens / asset.totalTokens) * 100}%` }}></div>
-                      </div>
-                    </CardContent>
-                    <CardFooter className="pt-2 border-t bg-muted/10 flex justify-end">
-                      {canDelete ? (
-                        <Button variant="destructive" size="sm" onClick={() => handleDeleteAsset(asset.id)}>
-                          <Trash2 className="w-4 h-4 mr-2" /> Excluir Ativo
-                        </Button>
-                      ) : (
-                        <p className="text-xs text-muted-foreground italic">Não pode ser excluído (possui investidores)</p>
-                      )}
-                    </CardFooter>
-                  </Card>
-                );
-              })}
+          {athleteToken.total_tokens < 100 && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Gerar Mais Tokens</CardTitle>
+                  <CardDescription>
+                    Você ainda pode gerar até {100 - athleteToken.total_tokens} tokens.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <Label htmlFor="new-tokens">Quantidade de Novos Tokens</Label>
+                    <Input
+                      id="new-tokens"
+                      type="number"
+                      value={newTokens}
+                      onChange={(e) => setNewTokens(Number(e.target.value))}
+                      min="1"
+                      max={100 - athleteToken.total_tokens}
+                      step="1"
+                    />
+                  </div>
+                  <Button onClick={generateMoreTokens} className="w-full">
+                    <Plus className="w-4 h-4 mr-2" />
+                    Gerar Tokens
+                  </Button>
+                </CardContent>
+              </Card>
             </div>
           )}
 
-          {/* MODAL DE CRIAR NOVO ATIVO */}
-          <Dialog open={isCreateAssetDialogOpen} onOpenChange={setIsCreateAssetDialogOpen}>
-            <DialogContent className="max-w-2xl">
+          {/* Modal de Edição de Perfil */}
+          <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>Lançar Novo Ativo</DialogTitle>
-                <DialogDescription>Crie um projeto específico, determine a quantidade de cotas e o preço inicial.</DialogDescription>
+                <DialogTitle>Editar Perfil Público</DialogTitle>
+                <DialogDescription>
+                  Atualize as informações que os patrocinadores verão no seu marketplace.
+                </DialogDescription>
               </DialogHeader>
 
-              <div className="grid gap-4 py-4">
-                <div>
-                  <Label>Título do Ativo *</Label>
-                  <Input placeholder="Ex: Rumo às Olimpíadas 2028" value={assetTitle} onChange={(e) => setAssetTitle(e.target.value)} />
-                </div>
-                <div>
-                  <Label>Descrição do Projeto *</Label>
-                  <Textarea placeholder="Explique por que os patrocinadores devem investir neste ativo..." value={assetDescription} onChange={(e) => setAssetDescription(e.target.value)} rows={3} />
-                </div>
-
+              <div className="space-y-4 py-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <Label>Link do Vídeo (YouTube) *</Label>
-                    <div className="flex relative">
-                      <Video className="absolute left-3 top-3 w-4 h-4 text-muted-foreground" />
-                      <Input className="pl-9" placeholder="https://youtube.com/watch?v=..." value={assetYoutubeUrl} onChange={(e) => setAssetYoutubeUrl(e.target.value)} />
-                    </div>
+                    <Label htmlFor="editAthleteName">Nome do Atleta *</Label>
+                    <Input id="editAthleteName" value={athleteName} onChange={(e) => setAthleteName(e.target.value)} />
                   </div>
                   <div>
-                    <Label>Imagem de Capa *</Label>
-                    <Input type="file" accept="image/*" onChange={(e) => setAssetImageFile(e.target.files?.[0] || null)} />
+                    <Label htmlFor="editSport">Modalidade *</Label>
+                    <Select value={sport} onValueChange={setSport}>
+                      <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="E-Sports">E-Sports</SelectItem>
+                        <SelectItem value="Futebol">Futebol</SelectItem>
+                        <SelectItem value="MMA">MMA</SelectItem>
+                        <SelectItem value="Atletismo">Atletismo</SelectItem>
+                        <SelectItem value="Basquete">Basquete</SelectItem>
+                        <SelectItem value="Vôlei">Vôlei</SelectItem>
+                        <SelectItem value="Natação">Natação</SelectItem>
+                        <SelectItem value="Outros">Outros</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4 border-t pt-4 mt-2">
-                  <div>
-                    <Label>Total de Cotas *</Label>
-                    <Input type="number" min="1" value={assetTokens} onChange={(e) => setAssetTokens(Number(e.target.value))} />
-                  </div>
-                  <div>
-                    <Label>Preço Inicial (R$) *</Label>
-                    <Input type="number" min="0.01" step="0.01" value={assetPrice} onChange={(e) => setAssetPrice(Number(e.target.value))} />
+                <div>
+                  <Label htmlFor="editDescription">Descrição *</Label>
+                  <Textarea id="editDescription" value={description} onChange={(e) => setDescription(e.target.value)} rows={3} />
+                </div>
+
+                {renderAvatarUploadArea()}
+                {renderGalleryUploadArea()}
+
+                <div>
+                  <Label htmlFor="editAchievements">Conquistas (uma por linha)</Label>
+                  <Textarea id="editAchievements" value={achievements} onChange={(e) => setAchievements(e.target.value)} rows={3} />
+                </div>
+
+                <div className="border-t pt-4">
+                  <h3 className="font-semibold mb-3">Redes Sociais</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <Input placeholder="Twitter/X" value={twitter} onChange={(e) => setTwitter(e.target.value)} />
+                    <Input placeholder="Instagram" value={instagram} onChange={(e) => setInstagram(e.target.value)} />
+                    <Input placeholder="Twitch" value={twitch} onChange={(e) => setTwitch(e.target.value)} />
+                    <Input placeholder="YouTube" value={youtube} onChange={(e) => setYoutube(e.target.value)} />
                   </div>
                 </div>
-              </div>
 
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setIsCreateAssetDialogOpen(false)}>Cancelar</Button>
-                <Button onClick={handleCreateAsset} disabled={creatingAsset}>
-                  {creatingAsset ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Plus className="w-4 h-4 mr-2" />}
-                  {creatingAsset ? 'Criando...' : 'Lançar Ativo'}
+                <Button onClick={updateProfile} className="w-full mt-4">
+                  Salvar Alterações
                 </Button>
-              </DialogFooter>
+              </div>
             </DialogContent>
           </Dialog>
         </>
