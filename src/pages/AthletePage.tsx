@@ -351,17 +351,20 @@ const AthletePage = () => {
       const executed = data?.executed === true;
       const pending = data?.pending === true;
 
+      // VERIFICAÇÃO ATUALIZADA:
       if (executed) {
-        toast.success(`Compra realizada! ${tokenAmount} tokens de ${athlete.name} por R$ ${totalAtLimit.toFixed(2)}`);
+        // Sucesso na compra imediata
+        toast.success(data?.message || `Compra realizada! ${tokenAmount} tokens de ${athlete.name}`);
         setTokenAmount(1);
         setLimitPrice(athlete.tokenPrice.toFixed(2));
       } else if (pending) {
-        toast.success(
-          `Ordem em espera! Seus ${tokenAmount} tokens de ${athlete.name} serão comprados quando alguém vender por ≤ R$ ${limitPriceNum.toFixed(2)}`
-        );
+        // Sucesso ao colocar na fila de espera
+        toast.success(data?.message || `Ordem em espera registrada para ${athlete.name}`);
         setTokenAmount(1);
       } else {
-        toast.info('Ordem registrada.');
+        // ERRO: Se não executou nem ficou em espera, o banco recusou (ex: sem saldo)
+        // Mostramos a mensagem exata que o banco de dados enviou como erro!
+        toast.error(data?.message || 'Não foi possível processar a ordem.');
       }
 
       await loadAthlete();
