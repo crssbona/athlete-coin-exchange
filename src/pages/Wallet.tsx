@@ -8,14 +8,17 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Wallet as WalletIcon, ArrowDownCircle, ArrowUpCircle, Landmark, History, TrendingUp } from "lucide-react";
+import { Wallet as WalletIcon, ArrowDownCircle, ArrowUpCircle, Landmark, History, TrendingUp, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { SponsorPanel } from "@/components/profile/SponsorPanel";
 
 export default function WalletPage() {
     const { user, loading } = useAuth();
     const navigate = useNavigate();
+
     const [balance, setBalance] = useState<number>(0);
+    const [blockedBalance, setBlockedBalance] = useState<number>(0); // NOVO: Estado para o saldo bloqueado
+
     const [depositAmount, setDepositAmount] = useState("");
     const [withdrawAmount, setWithdrawAmount] = useState("");
     const [pixKey, setPixKey] = useState("");
@@ -32,7 +35,7 @@ export default function WalletPage() {
 
     const loadWalletData = async () => {
         try {
-            // Busca o saldo
+            // 1. Busca o saldo disponível
             const { data: wallet } = await supabase
                 .from('wallets')
                 .select('balance')
@@ -41,7 +44,32 @@ export default function WalletPage() {
 
             setBalance(wallet?.balance || 0);
 
-            // Busca histórico de depósitos/saques
+            // 2. Busca o saldo bloqueado em ordens de ATIVOS
+            const { data: pendingAssets } = await supabase
+                .from('pending_asset_purchases')
+                .select('quantity, limit_price')
+                .eq('user_id', user?.id)
+                .eq('status', 'pending');
+
+            let blocked = 0;
+            if (pendingAssets) {
+                blocked += pendingAssets.reduce((acc, order) => acc + (order.quantity * order.limit_price), 0);
+            }
+
+            // 3. Busca o saldo bloqueado em ordens antigas de ATLETAS (para garantir compatibilidade)
+            const { data: pendingAthletes } = await supabase
+                .from('pending_purchases')
+                .select('quantity, limit_price')
+                .eq('user_id', user?.id)
+                .eq('status', 'pending');
+
+            if (pendingAthletes) {
+                blocked += pendingAthletes.reduce((acc, order) => acc + (order.quantity * order.limit_price), 0);
+            }
+
+            setBlockedBalance(blocked);
+
+            // 4. Busca histórico de depósitos/saques
             const { data: txs } = await supabase
                 .from('fiat_transactions')
                 .select('*')
@@ -128,10 +156,25 @@ export default function WalletPage() {
                             {/* Card de Saldo */}
                             <Card className="bg-gradient-to-br from-card to-card/50 border-primary/20 shadow-lg">
                                 <CardContent className="p-8">
-                                    <p className="text-sm font-medium text-muted-foreground mb-2">Saldo Disponível</p>
-                                    <h2 className="text-5xl font-bold tracking-tight">
-                                        R$ {balance.toFixed(2)}
-                                    </h2>
+                                    <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+                                        <div>
+                                            <p className="text-sm font-medium text-muted-foreground mb-2">Saldo Disponível</p>
+                                            <h2 className="text-5xl font-bold tracking-tight">
+                                                R$ {balance.toFixed(2)}
+                                            </h2>
+                                        </div>
+
+                                        {/* NOVO: Exibição do Saldo Bloqueado */}
+                                        {blockedBalance > 0 && (
+                                            <div className="flex items-center gap-2 bg-muted/50 border rounded-lg p-3 text-sm">
+                                                <Clock className="w-4 h-4 text-amber-500" />
+                                                <div className="flex flex-col">
+                                                    <span className="text-muted-foreground text-xs font-medium">Reservado em Ordens</span>
+                                                    <span className="font-bold text-foreground">R$ {blockedBalance.toFixed(2)}</span>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
                                 </CardContent>
                             </Card>
 
@@ -150,7 +193,7 @@ export default function WalletPage() {
                                                 Adicionar Fundos
                                             </CardTitle>
                                             <CardDescription>
-                                                Adicione saldo via PIX para começar a investir em atletas. (Integração Mercado Pago em breve)
+                                                Adicione saldo via PIX para começar a investir. (Integração Mercado Pago em breve)
                                             </CardDescription>
                                         </CardHeader>
                                         <CardContent className="space-y-4">
@@ -267,11 +310,8 @@ export default function WalletPage() {
                         </div>
 
                     </div>
-                    <div className="grid md:grid-cols-3 gap-6">
-                        {/* ... (todo o código da carteira que já fizemos fica aqui intacto) ... */}
-                    </div>
 
-                    {/* NOVO: Seção de Investimentos (SponsorPanel) */}
+                    {/* Seção de Investimentos (SponsorPanel) */}
                     <div className="mt-16 mb-6">
                         <h2 className="text-3xl font-bold flex items-center gap-3 mb-2">
                             <TrendingUp className="w-8 h-8 text-primary" />

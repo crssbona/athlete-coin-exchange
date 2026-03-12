@@ -44,9 +44,6 @@ export const Navbar = () => {
         </Link>
 
         <div className="hidden md:flex items-center gap-8">
-          <Link to="/marketplace" className="text-sm font-medium hover:text-primary transition-colors">
-            Marketplace
-          </Link>
           <Link to="/vitrine" className="text-sm font-medium hover:text-primary transition-colors">
             Vitrine
           </Link>

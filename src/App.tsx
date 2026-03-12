@@ -17,6 +17,7 @@ import NotFound from "./pages/NotFound";
 import WalletPage from "./pages/Wallet";
 import Vitrine from "./pages/Vitrine";
 import AthleteProfileVitrine from "./pages/AthleteProfileVitrine";
+import AssetTradePage from "./pages/AssetTradePage";
 
 const queryClient = new QueryClient();
 
@@ -40,6 +41,7 @@ function App() {
             <Route path="/wallet" element={<WalletPage />} />
             <Route path="/vitrine" element={<Vitrine />} />
             <Route path="/vitrine-atleta/:id" element={<AthleteProfileVitrine />} />
+            <Route path="/ativo/:assetId" element={<AssetTradePage />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
