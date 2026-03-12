@@ -708,16 +708,24 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
             </DialogContent>
           </Dialog>
 
-          {/* Modal de Edição de Perfil (Mantido igual) */}
+          {/* Modal de Edição de Perfil */}
           <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-            {/* ... conteúdo do modal de edição de perfil mantido para poupar espaço ... */}
             <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-              <DialogHeader><DialogTitle>Editar Perfil</DialogTitle></DialogHeader>
+              <DialogHeader>
+                <DialogTitle>Editar Perfil Público</DialogTitle>
+                <DialogDescription>
+                  Atualize as informações que os patrocinadores verão na sua vitrine.
+                </DialogDescription>
+              </DialogHeader>
+
               <div className="space-y-4 py-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div><Label>Nome</Label><Input value={athleteName} onChange={(e) => setAthleteName(e.target.value)} /></div>
                   <div>
-                    <Label>Modalidade</Label>
+                    <Label htmlFor="editAthleteName">Nome do Atleta *</Label>
+                    <Input id="editAthleteName" value={athleteName} onChange={(e) => setAthleteName(e.target.value)} />
+                  </div>
+                  <div>
+                    <Label htmlFor="editSport">Modalidade *</Label>
                     <Select value={sport} onValueChange={setSport}>
                       <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                       <SelectContent>
@@ -725,12 +733,42 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
                         <SelectItem value="Futebol">Futebol</SelectItem>
                         <SelectItem value="MMA">MMA</SelectItem>
                         <SelectItem value="Atletismo">Atletismo</SelectItem>
+                        <SelectItem value="Basquete">Basquete</SelectItem>
+                        <SelectItem value="Vôlei">Vôlei</SelectItem>
+                        <SelectItem value="Natação">Natação</SelectItem>
+                        <SelectItem value="Outros">Outros</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                 </div>
-                <div><Label>Descrição</Label><Textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={3} /></div>
-                <Button onClick={updateProfile} className="w-full mt-4">Salvar Alterações</Button>
+
+                <div>
+                  <Label htmlFor="editDescription">Descrição *</Label>
+                  <Textarea id="editDescription" value={description} onChange={(e) => setDescription(e.target.value)} rows={3} />
+                </div>
+
+                {/* Renderiza as funções de upload de avatar e galeria que já existem no componente */}
+                {renderAvatarUploadArea()}
+                {renderGalleryUploadArea()}
+
+                <div>
+                  <Label htmlFor="editAchievements">Conquistas (uma por linha)</Label>
+                  <Textarea id="editAchievements" value={achievements} onChange={(e) => setAchievements(e.target.value)} rows={3} />
+                </div>
+
+                <div className="border-t pt-4">
+                  <h3 className="font-semibold mb-3">Redes Sociais</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <Input placeholder="Twitter/X" value={twitter} onChange={(e) => setTwitter(e.target.value)} />
+                    <Input placeholder="Instagram" value={instagram} onChange={(e) => setInstagram(e.target.value)} />
+                    <Input placeholder="Twitch" value={twitch} onChange={(e) => setTwitch(e.target.value)} />
+                    <Input placeholder="YouTube" value={youtube} onChange={(e) => setYoutube(e.target.value)} />
+                  </div>
+                </div>
+
+                <Button onClick={updateProfile} className="w-full mt-4">
+                  Salvar Alterações
+                </Button>
               </div>
             </DialogContent>
           </Dialog>
