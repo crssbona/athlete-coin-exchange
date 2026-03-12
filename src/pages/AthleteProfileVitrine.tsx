@@ -291,7 +291,7 @@ const AthleteProfileVitrine = () => {
                                             <div className="p-5 pt-0 mt-auto">
                                                 <Link to={`/ativo/${asset.id}`} className="w-full">
                                                     <Button className="w-full" variant="default">
-                                                        Investir neste Ativo
+                                                        Ver ativo
                                                     </Button>
                                                 </Link>
                                             </div>
