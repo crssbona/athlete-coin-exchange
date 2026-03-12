@@ -15,6 +15,8 @@ import Profile from "./pages/Profile";
 import Watchlist from "./pages/Watchlist";
 import NotFound from "./pages/NotFound";
 import WalletPage from "./pages/Wallet";
+import Vitrine from "./pages/Vitrine";
+import AthleteProfileVitrine from "./pages/AthleteProfileVitrine";
 
 const queryClient = new QueryClient();
 
@@ -36,6 +38,8 @@ function App() {
             <Route path="/profile" element={<Profile />} />
             <Route path="/watchlist" element={<Watchlist />} />
             <Route path="/wallet" element={<WalletPage />} />
+            <Route path="/vitrine" element={<Vitrine />} />
+            <Route path="/vitrine-atleta/:id" element={<AthleteProfileVitrine />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
