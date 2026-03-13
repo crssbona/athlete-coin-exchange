@@ -450,31 +450,35 @@ export function SponsorPanel({ userId }: SponsorPanelProps) {
                 }
 
                 return (
-                  <div key={item.asset_id} className="flex items-center justify-between p-4 border rounded-lg bg-card hover:bg-accent/50 transition-colors">
+                  <div key={item.asset_id} className="flex flex-col md:flex-row md:items-center justify-between p-4 border rounded-lg bg-card hover:bg-accent/50 transition-colors gap-4">
+                    {/* Topo no Mobile / Esquerda no Desktop */}
                     <div className="flex items-center gap-4">
-                      <Link to={`/ativo/${item.asset_id}`}>
-                        <div className="w-12 h-12 rounded border bg-muted flex items-center justify-center overflow-hidden cursor-pointer hover:ring-2 hover:ring-primary transition-all">
+                      <Link to={`/ativo/${item.asset_id}`} className="shrink-0">
+                        <div className="w-14 h-14 md:w-12 md:h-12 rounded border bg-muted flex items-center justify-center overflow-hidden cursor-pointer hover:ring-2 hover:ring-primary transition-all">
                           {asset.avatar ? <img src={asset.avatar} className="w-full h-full object-cover" /> : <ImageIcon className="w-6 h-6 text-muted-foreground/30" />}
                         </div>
                       </Link>
                       <div>
-                        <h4 className="font-semibold">{asset.name}</h4>
+                        <h4 className="font-bold md:font-semibold text-lg md:text-base leading-tight mb-1">{asset.name}</h4>
                         <p className="text-sm text-muted-foreground">
-                          {item.totalQuantity} tokens • Preço Atual: R$ {asset.tokenPrice.toFixed(2)}
+                          {item.totalQuantity} tokens <span className="hidden md:inline">•</span><br className="md:hidden" /> Preço: R$ {asset.tokenPrice.toFixed(2)}
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-4">
-                      <div className="text-right">
-                        <p className="font-semibold text-lg">R$ {currentValue.toFixed(2)}</p>
-                        <div className="flex items-center gap-1 justify-end">
-                          <Badge variant={priceChange >= 0 ? "default" : "destructive"} className="text-xs">
+
+                    {/* Fundo no Mobile / Direita no Desktop */}
+                    <div className="flex items-center justify-between md:justify-end gap-4 w-full md:w-auto pt-4 md:pt-0 border-t border-border/50 md:border-transparent mt-2 md:mt-0">
+                      <div className="text-left md:text-right">
+                        <p className="text-xs text-muted-foreground md:hidden mb-0.5">Valor Atual</p>
+                        <p className="font-bold text-xl md:text-lg">R$ {currentValue.toFixed(2)}</p>
+                        <div className="flex items-center gap-1 justify-start md:justify-end mt-1 md:mt-0">
+                          <Badge variant={priceChange >= 0 ? "default" : "destructive"} className="text-[10px] md:text-xs px-1.5 py-0">
                             {priceChange >= 0 ? '+' : ''}{priceChange.toFixed(2)}%
                           </Badge>
                           {priceChange >= 0 ? <TrendingUp className="w-4 h-4 text-green-500" /> : <TrendingDown className="w-4 h-4 text-red-500" />}
                         </div>
                       </div>
-                      <Button variant="outline" size="sm" onClick={() => openSellDialog(item)}>Vender</Button>
+                      <Button variant="outline" size="sm" onClick={() => openSellDialog(item)} className="h-10 md:h-9 px-6 md:px-3">Vender</Button>
                     </div>
                   </div>
                 );
@@ -505,37 +509,41 @@ export function SponsorPanel({ userId }: SponsorPanelProps) {
                 const isPartial = tx.original_quantity && tx.quantity < tx.original_quantity;
 
                 return (
-                  <div key={tx.id} className="flex items-center justify-between p-4 border rounded-lg bg-card hover:bg-accent/50 transition-colors">
-                    <div className="flex items-center gap-4">
-                      <Link to={`/ativo/${tx.asset_id}`}>
+                  <div key={tx.id} className="flex flex-col md:flex-row md:items-center justify-between p-4 border rounded-lg bg-card hover:bg-accent/50 transition-colors gap-4">
+                    {/* Topo no Mobile / Esquerda no Desktop */}
+                    <div className="flex items-start md:items-center gap-4">
+                      <Link to={`/ativo/${tx.asset_id}`} className="shrink-0 mt-1 md:mt-0">
                         <div className="w-12 h-12 rounded border bg-muted flex items-center justify-center overflow-hidden cursor-pointer hover:ring-2 hover:ring-primary transition-all">
                           {asset.avatar ? <img src={asset.avatar} className="w-full h-full object-cover" /> : <ImageIcon className="w-6 h-6 text-muted-foreground/30" />}
                         </div>
                       </Link>
-                      <div>
-                        <div className="flex items-center gap-2 mb-1">
-                          <h4 className="font-semibold">{asset.name}</h4>
-                          <Badge variant={isBuy ? "default" : "destructive"} className={isBuy ? "bg-green-600 hover:bg-green-700 text-white" : ""}>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2 mb-1.5 md:mb-1">
+                          <h4 className="font-semibold truncate max-w-[150px] sm:max-w-[200px]">{asset.name}</h4>
+                          <Badge variant={isBuy ? "default" : "destructive"} className={isBuy ? "bg-green-600 hover:bg-green-700 text-white text-[10px] py-0" : "text-[10px] py-0"}>
                             {isBuy ? 'COMPRA' : 'VENDA'}
                           </Badge>
                         </div>
-                        <div className="flex items-center gap-2 mt-1">
+                        <div className="flex flex-wrap items-center gap-1.5 md:gap-2 mt-1">
                           <p className="text-sm text-muted-foreground">
-                            {tx.quantity} tokens • R$ {tx.price.toFixed(2)} / token
+                            {tx.quantity} un. <span className="hidden md:inline">•</span> R$ {tx.price.toFixed(2)}/un
                           </p>
                           {isPartial && (
-                            <span className="text-[10px] font-medium bg-amber-500/20 text-amber-600 px-2 py-0.5 rounded-full">
+                            <span className="text-[10px] font-medium bg-amber-500/20 text-amber-600 px-2 py-0.5 rounded-full whitespace-nowrap mt-1 md:mt-0">
                               Parcial ({tx.quantity} de {tx.original_quantity})
                             </span>
                           )}
                         </div>
-                        <p className="text-xs text-muted-foreground mt-0.5">Data: {txDate}</p>
+                        <p className="text-xs text-muted-foreground mt-1.5 md:mt-0.5">Data: {txDate}</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-4">
+
+                    {/* Fundo no Mobile / Direita no Desktop */}
+                    <div className="flex items-center justify-between md:justify-end w-full md:w-auto pt-3 md:pt-0 border-t border-border/50 md:border-transparent mt-2 md:mt-0">
+                      <p className="text-sm text-muted-foreground md:hidden font-medium">Total da transação</p>
                       <div className="text-right">
-                        <p className="text-sm text-muted-foreground mb-1">Total</p>
-                        <p className={`font-semibold text-lg ${isBuy ? 'text-foreground' : 'text-destructive'}`}>
+                        <p className="text-sm text-muted-foreground mb-1 hidden md:block">Total</p>
+                        <p className={`font-bold text-xl md:text-lg ${isBuy ? 'text-foreground' : 'text-destructive'}`}>
                           {isBuy ? '-' : '+'} R$ {totalValue.toFixed(2)}
                         </p>
                       </div>

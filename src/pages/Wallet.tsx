@@ -282,7 +282,7 @@ export default function WalletPage() {
                                             Nenhuma movimentação financeira.
                                         </p>
                                     ) : (
-                                        <div className="space-y-4">
+                                        <div className="space-y-4 max-h-[350px] overflow-y-auto pr-2 scrollbar-thin">
                                             {transactions.map((tx) => (
                                                 <div key={tx.id} className="flex items-center justify-between pb-4 border-b last:border-0 last:pb-0">
                                                     <div className="flex items-center gap-3">

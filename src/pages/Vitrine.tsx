@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
 import { VitrineCard } from "@/components/VitrineCard";
-import { mockAthletes } from "@/data/mockAthletes";
 import { Athlete } from "@/types/athlete";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -50,11 +49,12 @@ const Vitrine = () => {
                     }
                 }));
 
-            // Combina com mockAthletes (assim como no Marketplace)
-            setAthletes([...supabaseAthletes, ...mockAthletes]);
+            // Agora define APENAS os atletas reais da base de dados
+            setAthletes(supabaseAthletes);
         } catch (error) {
             console.error('Erro ao carregar atletas:', error);
-            setAthletes(mockAthletes);
+            // Em caso de erro, a vitrine fica vazia em vez de carregar perfis falsos
+            setAthletes([]);
         } finally {
             setLoading(false);
         }
@@ -127,7 +127,7 @@ const Vitrine = () => {
                             {filteredAthletes.length === 0 && (
                                 <div className="text-center py-12">
                                     <p className="text-xl text-muted-foreground">
-                                        Nenhum atleta encontrado com esses filtros.
+                                        Nenhum atleta encontrado.
                                     </p>
                                 </div>
                             )}
