@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { TrendingUp, Users, DollarSign, Trophy } from "lucide-react";
+import { TrendingUp, Coins, DollarSign, ShieldCheck } from "lucide-react";
 import { Button } from "./ui/button";
 import heroImage from "@/assets/hero-bg.jpg";
 
@@ -25,7 +25,7 @@ export const Hero = () => {
           {/* Badge */}
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 glow-primary">
             <TrendingUp className="w-4 h-4 text-primary" />
-            <span className="text-sm font-medium">Invista no Futuro dos Atletas</span>
+            <span className="text-sm font-medium">A Nova Geração de Investimentos Esportivos</span>
           </div>
 
           {/* Main heading */}
@@ -38,15 +38,14 @@ export const Hero = () => {
 
           {/* Subtitle */}
           <p className="text-xl md:text-2xl text-muted-foreground max-w-2xl mx-auto">
-            Compre, venda e negocie tokens de atletas e gamers profissionais.
-            Seja parte do sucesso deles enquanto eles crescem.
+            Compre, venda e negoceie tokens de ativos exclusivos gerados pelos seus atletas favoritos num mercado transparente e seguro.
           </p>
 
           {/* CTA Buttons */}
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-            <Link to="/marketplace">
+            <Link to="/vitrine">
               <Button variant="hero" size="lg" className="text-lg px-8">
-                Explorar Marketplace
+                Explorar Vitrine
               </Button>
             </Link>
             <Link to="/how-it-works">
@@ -60,10 +59,10 @@ export const Hero = () => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-16 pt-8 border-t border-border">
             <div className="space-y-2">
               <div className="flex items-center justify-center gap-2 text-success">
-                <Users className="w-6 h-6" />
+                <Coins className="w-6 h-6" />
               </div>
               <p className="text-3xl font-bold">1,200+</p>
-              <p className="text-sm text-muted-foreground">Atletas Ativos</p>
+              <p className="text-sm text-muted-foreground">Tokens Listados</p>
             </div>
             <div className="space-y-2">
               <div className="flex items-center justify-center gap-2 text-primary">
@@ -74,10 +73,10 @@ export const Hero = () => {
             </div>
             <div className="space-y-2">
               <div className="flex items-center justify-center gap-2 text-premium">
-                <Trophy className="w-6 h-6" />
+                <ShieldCheck className="w-6 h-6" />
               </div>
-              <p className="text-3xl font-bold">10k+</p>
-              <p className="text-sm text-muted-foreground">Investidores</p>
+              <p className="text-3xl font-bold">100%</p>
+              <p className="text-sm text-muted-foreground">Mercado P2P Seguro</p>
             </div>
           </div>
         </div>

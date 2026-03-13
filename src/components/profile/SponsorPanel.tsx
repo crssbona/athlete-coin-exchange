@@ -441,7 +441,13 @@ export function SponsorPanel({ userId }: SponsorPanelProps) {
 
                 const avgPrice = item.totalInvested / item.totalQuantity;
                 const currentValue = item.totalQuantity * asset.tokenPrice;
-                const priceChange = ((asset.tokenPrice - avgPrice) / avgPrice) * 100;
+                // Proteção contra divisão por zero (+Infinity)
+                let priceChange = 0;
+                if (avgPrice > 0) {
+                  priceChange = ((asset.tokenPrice - avgPrice) / avgPrice) * 100;
+                } else if (asset.tokenPrice > 0) {
+                  priceChange = 100; // Se o custo médio foi 0 e o ativo tem valor, consideramos 100% de lucro positivo
+                }
 
                 return (
                   <div key={item.asset_id} className="flex items-center justify-between p-4 border rounded-lg bg-card hover:bg-accent/50 transition-colors">
