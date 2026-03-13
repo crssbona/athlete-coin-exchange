@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { User, Wallet, Settings, LogOut, Eye, UserCircle, Menu, ChevronDown, ChevronUp } from "lucide-react";
+import { User, Wallet, Settings, LogOut, Eye, UserCircle, Menu, ChevronDown, ChevronUp, Sun, Moon } from "lucide-react";
 import { Button } from "./ui/button";
 import { useAuth } from "@/hooks/useAuth";
+import { useTheme } from "@/components/theme-provider"; // <-- Importe o ThemeProvider
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,8 +20,14 @@ import logoLateral from "@/assets/logo-escrita-lateral.png";
 export const Navbar = () => {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
+  const { theme, setTheme } = useTheme(); // <-- Hook do tema
+
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isProfileSubmenuOpen, setIsProfileSubmenuOpen] = useState(false); // Novo estado para o submenu mobile
+  const [isProfileSubmenuOpen, setIsProfileSubmenuOpen] = useState(false);
+
+  const toggleTheme = () => {
+    setTheme(theme === "dark" ? "light" : "dark");
+  };
 
   const handleSignOut = async () => {
     const { error } = await signOut();
@@ -29,7 +36,7 @@ export const Navbar = () => {
     } else {
       toast.success("Você saiu da conta");
       setIsMobileMenuOpen(false);
-      setIsProfileSubmenuOpen(false); // Fecha o submenu ao sair
+      setIsProfileSubmenuOpen(false);
       navigate("/");
     }
   };
@@ -39,11 +46,10 @@ export const Navbar = () => {
   };
 
   const handleNavigation = (path: string) => {
-    setIsMobileMenuOpen(false); // Fecha a gaveta mobile inteira
+    setIsMobileMenuOpen(false);
     navigate(path);
   };
 
-  // Função para renderizar o Menu do Utilizador (usada APENAS NO DESKTOP agora)
   const renderUserMenuDesktop = () => (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -71,7 +77,7 @@ export const Navbar = () => {
         </DropdownMenuItem>
         <DropdownMenuItem onClick={() => navigate('/profile')}>
           <UserCircle className="w-4 h-4 mr-2" />
-          Editar perfil
+          Meu Perfil
         </DropdownMenuItem>
         <DropdownMenuItem>
           <Settings className="w-4 h-4 mr-2" />
@@ -90,14 +96,15 @@ export const Navbar = () => {
     <nav className="fixed top-0 left-0 right-0 z-50 border-b border-border bg-background/80 backdrop-blur-lg">
       <div className="container mx-auto px-4 h-16 flex items-center justify-between">
         <Link to="/" className="flex items-center gap-2">
+          {/* Dica: Você pode querer usar um logo mais escuro no modo light no futuro! */}
           <img
             src={logoLateral}
             alt="Logo Opatrocinador"
-            className="w-[160px] md:w-[250px] h-auto object-contain"
+            className={`w-[160px] md:w-[250px] h-auto object-contain transition-all ${theme === 'light' ? 'invert' : ''}`}
           />
         </Link>
 
-        {/* NAVEGAÇÃO DESKTOP (Escondida em ecrãs pequenos) */}
+        {/* NAVEGAÇÃO DESKTOP */}
         <div className="hidden md:flex items-center gap-8">
           <Link to="/vitrine" className="text-sm font-medium hover:text-primary transition-colors">
             Vitrine
@@ -107,8 +114,13 @@ export const Navbar = () => {
           </Link>
         </div>
 
-        {/* ACÇÕES DESKTOP (Escondida em ecrãs pequenos) */}
+        {/* ACÇÕES DESKTOP */}
         <div className="hidden md:flex items-center gap-3">
+          {/* Botão de Tema (Desktop) */}
+          <Button variant="ghost" size="icon" onClick={toggleTheme} className="hover:text-primary transition-colors mr-2">
+            {theme === "dark" ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+          </Button>
+
           <Link to="/wallet">
             <Button variant="ghost" size="icon" className="hover:text-primary transition-colors">
               <Wallet className="w-5 h-5" />
@@ -134,8 +146,13 @@ export const Navbar = () => {
           )}
         </div>
 
-        {/* NAVEGAÇÃO MOBILE (Menu Sanduíche) */}
-        <div className="md:hidden flex items-center">
+        {/* NAVEGAÇÃO MOBILE */}
+        <div className="md:hidden flex items-center gap-2">
+          {/* Botão de Tema (Mobile) - Fora da gaveta para fácil acesso */}
+          <Button variant="ghost" size="icon" onClick={toggleTheme}>
+            {theme === "dark" ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+          </Button>
+
           <Sheet open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
             <SheetTrigger asChild>
               <Button variant="ghost" size="icon">
@@ -149,27 +166,17 @@ export const Navbar = () => {
 
               <div className="flex flex-col gap-6">
 
-                {/* 1. SEÇÃO DO UTILIZADOR (Aparece no topo se estiver logado) */}
                 {user ? (
                   <div className="flex flex-col gap-5">
-
-                    {/* Botão Inteiro Clicável: Minha Carteira */}
-                    <button
-                      onClick={() => handleNavigation('/wallet')}
-                      className="flex items-center gap-4 w-full text-left group"
-                    >
+                    <button onClick={() => handleNavigation('/wallet')} className="flex items-center gap-4 w-full text-left group">
                       <div className="w-10 h-10 rounded-full bg-muted border flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary transition-colors shrink-0">
                         <Wallet className="w-5 h-5" />
                       </div>
                       <span className="text-lg font-medium group-hover:text-primary transition-colors">Minha Carteira</span>
                     </button>
 
-                    {/* Botão Inteiro Clicável: Meu Perfil com Submenu */}
                     <div className="flex flex-col gap-2">
-                      <button
-                        onClick={() => setIsProfileSubmenuOpen(!isProfileSubmenuOpen)}
-                        className="flex items-center justify-between w-full text-left group"
-                      >
+                      <button onClick={() => setIsProfileSubmenuOpen(!isProfileSubmenuOpen)} className="flex items-center justify-between w-full text-left group">
                         <div className="flex items-center gap-4">
                           <div className="w-10 h-10 rounded-full bg-muted border flex items-center justify-center group-hover:bg-primary/10 group-hover:text-primary transition-colors shrink-0">
                             <Avatar className="w-8 h-8">
@@ -180,14 +187,9 @@ export const Navbar = () => {
                           </div>
                           <span className="text-lg font-medium group-hover:text-primary transition-colors">Meu Perfil</span>
                         </div>
-                        {isProfileSubmenuOpen ? (
-                          <ChevronUp className="w-5 h-5 text-muted-foreground shrink-0" />
-                        ) : (
-                          <ChevronDown className="w-5 h-5 text-muted-foreground shrink-0" />
-                        )}
+                        {isProfileSubmenuOpen ? <ChevronUp className="w-5 h-5 text-muted-foreground shrink-0" /> : <ChevronDown className="w-5 h-5 text-muted-foreground shrink-0" />}
                       </button>
 
-                      {/* Submenu Mobile que desliza para baixo */}
                       {isProfileSubmenuOpen && (
                         <div className="flex flex-col gap-4 pl-[56px] mt-2 pb-2 animate-in slide-in-from-top-2">
                           <button onClick={() => handleNavigation('/watchlist')} className="flex items-center gap-3 text-muted-foreground hover:text-primary transition-colors text-left w-full py-1">
@@ -205,13 +207,11 @@ export const Navbar = () => {
                         </div>
                       )}
                     </div>
-
                   </div>
                 ) : (
                   <div className="flex flex-col gap-3">
                     <Button variant="outline" className="w-full justify-center h-12" onClick={() => handleNavigation('/auth')}>
-                      <User className="w-4 h-4 mr-2" />
-                      Entrar
+                      <User className="w-4 h-4 mr-2" /> Entrar
                     </Button>
                     <Button variant="default" className="w-full justify-center bg-primary h-12" onClick={() => handleNavigation('/auth')}>
                       Criar Conta
@@ -221,16 +221,10 @@ export const Navbar = () => {
 
                 <div className="h-px bg-border w-full my-1" />
 
-                {/* 2. LINKS DE NAVEGAÇÃO PÚBLICOS */}
                 <div className="flex flex-col gap-5">
-                  <Link to="/vitrine" onClick={() => setIsMobileMenuOpen(false)} className="text-lg font-medium hover:text-primary transition-colors">
-                    Vitrine
-                  </Link>
-                  <Link to="/how-it-works" onClick={() => setIsMobileMenuOpen(false)} className="text-lg font-medium hover:text-primary transition-colors">
-                    Como Funciona
-                  </Link>
+                  <Link to="/vitrine" onClick={() => setIsMobileMenuOpen(false)} className="text-lg font-medium hover:text-primary transition-colors">Vitrine</Link>
+                  <Link to="/how-it-works" onClick={() => setIsMobileMenuOpen(false)} className="text-lg font-medium hover:text-primary transition-colors">Como Funciona</Link>
                 </div>
-
               </div>
             </SheetContent>
           </Sheet>

@@ -4,6 +4,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { ThemeProvider } from "@/components/theme-provider";
 import Index from "./pages/Index";
 import Marketplace from "./pages/Marketplace";
 import AthletePage from "./pages/AthletePage";
@@ -24,29 +25,31 @@ const queryClient = new QueryClient();
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/marketplace" element={<Marketplace />} />
-            <Route path="/athlete/:id" element={<AthletePage />} />
-            <Route path="/how-it-works" element={<HowItWorks />} />
-            <Route path="/auth" element={<Auth />} />
-            <Route path="/forgot-password" element={<ForgotPassword />} />
-            <Route path="/reset-password" element={<ResetPassword />} />
-            <Route path="/profile" element={<Profile />} />
-            <Route path="/watchlist" element={<Watchlist />} />
-            <Route path="/wallet" element={<WalletPage />} />
-            <Route path="/vitrine" element={<Vitrine />} />
-            <Route path="/vitrine-atleta/:id" element={<AthleteProfileVitrine />} />
-            <Route path="/ativo/:assetId" element={<AssetTradePage />} />
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
-      </TooltipProvider>
+      <ThemeProvider defaultTheme="dark" storageKey="opatrocinador-theme">
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <Routes>
+              <Route path="/" element={<Index />} />
+              <Route path="/marketplace" element={<Marketplace />} />
+              <Route path="/athlete/:id" element={<AthletePage />} />
+              <Route path="/how-it-works" element={<HowItWorks />} />
+              <Route path="/auth" element={<Auth />} />
+              <Route path="/forgot-password" element={<ForgotPassword />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
+              <Route path="/profile" element={<Profile />} />
+              <Route path="/watchlist" element={<Watchlist />} />
+              <Route path="/wallet" element={<WalletPage />} />
+              <Route path="/vitrine" element={<Vitrine />} />
+              <Route path="/vitrine-atleta/:id" element={<AthleteProfileVitrine />} />
+              <Route path="/ativo/:assetId" element={<AssetTradePage />} />
+              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </BrowserRouter>
+        </TooltipProvider>
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }

@@ -8,45 +8,47 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    --background: 240 10% 6%;
-    --foreground: 0 0% 98%;
+    /* MODO CLARO (NOVO) */
+    --background: 0 0% 100%;
+    --foreground: 240 10% 6%;
 
-    --card: 240 8% 8%;
-    --card-foreground: 0 0% 98%;
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 6%;
 
-    --popover: 240 8% 10%;
-    --popover-foreground: 0 0% 98%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 6%;
 
-    --primary: 274 69% 28%;
+    /* O roxo original fica excelente no modo claro, só precisamos de um pouco mais de contraste */
+    --primary: 274 69% 35%;
     --primary-foreground: 0 0% 100%;
     --primary-glow: 277 74% 57%;
 
-    --secondary: 240 6% 15%;
-    --secondary-foreground: 0 0% 98%;
+    --secondary: 240 5% 96%;
+    --secondary-foreground: 240 6% 10%;
 
-    --muted: 240 5% 20%;
-    --muted-foreground: 240 5% 65%;
+    --muted: 240 5% 96%;
+    --muted-foreground: 240 5% 45%;
 
-    --accent: 310 65% 33%;
+    --accent: 310 65% 40%;
     --accent-foreground: 0 0% 100%;
 
     --success: 142 76% 36%;
     --success-foreground: 0 0% 100%;
-    --success-glow: 142 76% 50%;
+    --success-glow: 142 76% 40%;
 
     --danger: 0 84% 60%;
     --danger-foreground: 0 0% 100%;
-    --danger-glow: 0 84% 70%;
+    --danger-glow: 0 84% 60%;
 
-    --premium: 45 93% 58%;
+    --premium: 45 93% 50%;
     --premium-foreground: 0 0% 10%;
-    --premium-glow: 45 93% 70%;
+    --premium-glow: 45 93% 58%;
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 98%;
 
-    --border: 240 6% 20%;
-    --input: 240 6% 15%;
+    --border: 240 6% 90%;
+    --input: 240 6% 90%;
     --ring: 250 95% 65%;
 
     --radius: 0.75rem;
@@ -56,6 +58,39 @@ All colors MUST be HSL.
     --chart-3: 45 93% 58%;
     --chart-4: 0 84% 60%;
     --chart-5: 200 80% 50%;
+  }
+
+  .dark {
+    /* MODO ESCURO (As suas cores originais mantidas 100% intactas!) */
+    --background: 240 10% 6%;
+    --foreground: 0 0% 98%;
+    --card: 240 8% 8%;
+    --card-foreground: 0 0% 98%;
+    --popover: 240 8% 10%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 274 69% 28%;
+    --primary-foreground: 0 0% 100%;
+    --primary-glow: 277 74% 57%;
+    --secondary: 240 6% 15%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 240 5% 20%;
+    --muted-foreground: 240 5% 65%;
+    --accent: 310 65% 33%;
+    --accent-foreground: 0 0% 100%;
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 100%;
+    --success-glow: 142 76% 50%;
+    --danger: 0 84% 60%;
+    --danger-foreground: 0 0% 100%;
+    --danger-glow: 0 84% 70%;
+    --premium: 45 93% 58%;
+    --premium-foreground: 0 0% 10%;
+    --premium-glow: 45 93% 70%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 6% 20%;
+    --input: 240 6% 15%;
+    --ring: 250 95% 65%;
   }
 }
 
