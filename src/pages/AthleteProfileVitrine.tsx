@@ -7,6 +7,9 @@ import { mockAthletes } from "@/data/mockAthletes";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/hooks/useAuth";
+import { toast } from "sonner";
+import { Heart } from "lucide-react";
 import {
     Trophy,
     Medal,
@@ -35,8 +38,11 @@ interface Asset {
 
 const AthleteProfileVitrine = () => {
     const { id } = useParams<{ id: string }>();
+    const { user } = useAuth();
+
     const [athlete, setAthlete] = useState<Athlete | null>(null);
-    const [assets, setAssets] = useState<Asset[]>([]); // Estado para guardar os ativos
+    const [assets, setAssets] = useState<Asset[]>([]);
+    const [watchlist, setWatchlist] = useState<Set<string>>(new Set());
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -103,6 +109,70 @@ const AthleteProfileVitrine = () => {
             fetchAthleteAndAssets();
         }
     }, [id]);
+
+    // NOVO: useEffect para carregar a watchlist do usuário
+    useEffect(() => {
+        const fetchWatchlist = async () => {
+            if (!user) return;
+            try {
+                const { data, error } = await supabase
+                    .from('user_watchlists')
+                    .select('asset_id')
+                    .eq('user_id', user.id);
+
+                if (error) throw error;
+                if (data) {
+                    setWatchlist(new Set(data.map(item => item.asset_id)));
+                }
+            } catch (error) {
+                console.error("Erro ao carregar watchlist:", error);
+            }
+        };
+        fetchWatchlist();
+    }, [user]);
+
+    // NOVO: Função para adicionar/remover da watchlist
+    const toggleWatchlist = async (assetId: string) => {
+        if (!user) {
+            toast.error("Você precisa estar logado para adicionar à watchlist.");
+            return;
+        }
+
+        const isWatchlisted = watchlist.has(assetId);
+
+        try {
+            if (isWatchlisted) {
+                // Remover
+                const { error } = await supabase
+                    .from('user_watchlists')
+                    .delete()
+                    .eq('user_id', user.id)
+                    .eq('asset_id', assetId);
+
+                if (error) throw error;
+
+                setWatchlist(prev => {
+                    const newSet = new Set(prev);
+                    newSet.delete(assetId);
+                    return newSet;
+                });
+                toast.success("Ativo removido da sua Watchlist!");
+            } else {
+                // Adicionar
+                const { error } = await supabase
+                    .from('user_watchlists')
+                    .insert({ user_id: user.id, asset_id: assetId });
+
+                if (error) throw error;
+
+                setWatchlist(prev => new Set(prev).add(assetId));
+                toast.success("Ativo adicionado à Watchlist!");
+            }
+        } catch (error) {
+            console.error("Erro ao modificar watchlist:", error);
+            toast.error("Ocorreu um erro. Tente novamente.");
+        }
+    };
 
     if (loading) {
         return (
@@ -287,13 +357,21 @@ const AthleteProfileVitrine = () => {
                                                 </div>
                                             </CardContent>
 
-                                            {/* Botão de Investir */}
-                                            <div className="p-5 pt-0 mt-auto">
-                                                <Link to={`/ativo/${asset.id}`} className="w-full">
+                                            {/* Botões do Card */}
+                                            <div className="p-5 pt-0 mt-auto space-y-2">
+                                                <Link to={`/ativo/${asset.id}`} className="w-full block">
                                                     <Button className="w-full" variant="default">
                                                         Ver ativo
                                                     </Button>
                                                 </Link>
+                                                <Button
+                                                    className="w-full"
+                                                    variant="outline"
+                                                    onClick={() => toggleWatchlist(asset.id)}
+                                                >
+                                                    <Heart className={`w-4 h-4 mr-2 ${watchlist.has(asset.id) ? 'fill-red-500 text-red-500' : ''}`} />
+                                                    {watchlist.has(asset.id) ? 'Remover da Watchlist' : 'Adicionar à Watchlist'}
+                                                </Button>
                                             </div>
                                         </Card>
                                     );

@@ -546,6 +546,28 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
             </div>
             {renderAvatarUploadArea()}
             {renderGalleryUploadArea()}
+
+            <div>
+              <Label htmlFor="achievements">Conquistas (uma por linha)</Label>
+              <Textarea
+                id="achievements"
+                value={achievements}
+                onChange={(e) => setAchievements(e.target.value)}
+                placeholder="Campeão Regional 2023&#10;Top 10 Nacional&#10;500+ horas de jogo"
+                rows={3}
+              />
+            </div>
+
+            <div className="border-t pt-4 mb-4">
+              <h3 className="font-semibold mb-3">Redes Sociais (opcional)</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <Input placeholder="Twitter/X" value={twitter} onChange={(e) => setTwitter(e.target.value)} />
+                <Input placeholder="Instagram" value={instagram} onChange={(e) => setInstagram(e.target.value)} />
+                <Input placeholder="Twitch" value={twitch} onChange={(e) => setTwitch(e.target.value)} />
+                <Input placeholder="YouTube" value={youtube} onChange={(e) => setYoutube(e.target.value)} />
+              </div>
+            </div>
+
             <Button onClick={createProfile} className="w-full" size="lg"><User className="w-4 h-4 mr-2" />Criar Perfil</Button>
           </CardContent>
         </Card>
