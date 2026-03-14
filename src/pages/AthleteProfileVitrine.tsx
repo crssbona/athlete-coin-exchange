@@ -214,7 +214,7 @@ const AthleteProfileVitrine = () => {
                         <img
                             src={athlete.avatar}
                             alt={athlete.name}
-                            className="w-40 h-40 md:w-48 md:h-48 rounded-2xl object-cover shadow-lg border-4 border-card shrink-0"
+                            className="w-40 h-40 md:w-48 md:h-48 rounded-full object-cover shadow-lg border-4 border-card shrink-0"
                         />
                         <div className="flex-1 space-y-4 flex flex-col items-center md:items-start w-full">
                             <div className="flex flex-col items-center md:items-start">

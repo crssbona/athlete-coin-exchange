@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { User, Wallet, Settings, LogOut, Eye, UserCircle, Menu, ChevronDown, ChevronUp, Sun, Moon } from "lucide-react";
 import { Button } from "./ui/button";
 import { useAuth } from "@/hooks/useAuth";
-import { useTheme } from "@/components/theme-provider"; // <-- Importe o ThemeProvider
+import { useTheme } from "@/components/theme-provider";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -15,12 +15,15 @@ import {
 import { Avatar, AvatarFallback } from "./ui/avatar";
 import { toast } from "sonner";
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from "./ui/sheet";
-import logoLateral from "@/assets/logo-escrita-lateral.png";
+
+// 🔥 Atualize aqui para os caminhos correctos das suas imagens!
+import logoDark from "@/assets/logo-dark.png"; // Caminho para o logo do modo escuro
+import logoLight from "@/assets/logo-light.png"; // Caminho para o logo do modo claro
 
 export const Navbar = () => {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
-  const { theme, setTheme } = useTheme(); // <-- Hook do tema
+  const { theme, setTheme } = useTheme();
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isProfileSubmenuOpen, setIsProfileSubmenuOpen] = useState(false);
@@ -96,11 +99,13 @@ export const Navbar = () => {
     <nav className="fixed top-0 left-0 right-0 z-50 border-b border-border bg-background/80 backdrop-blur-lg">
       <div className="container mx-auto px-4 h-16 flex items-center justify-between">
         <Link to="/" className="flex items-center gap-2">
-          {/* Dica: Você pode querer usar um logo mais escuro no modo light no futuro! */}
+          {/* 👇 LÓGICA DE TROCA DE LOGO AQUI 👇 */}
           <img
-            src={logoLateral}
+            // Se o tema for escuro, mostra o logo escura. Caso contrário (claro), mostra o logo clara.
+            src={theme === 'dark' ? logoDark : logoLight}
             alt="Logo Opatrocinador"
-            className={`w-[160px] md:w-[250px] h-auto object-contain transition-all ${theme === 'light' ? 'invert' : ''}`}
+            // Mantemos as classes de tamanho e object-contain. Removemos a lógica de filtro 'invert'.
+            className="w-[160px] md:w-[250px] h-auto object-contain transition-all"
           />
         </Link>
 
