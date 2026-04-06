@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Wallet as WalletIcon, ArrowDownCircle, ArrowUpCircle, Landmark, History, TrendingUp, Clock } from "lucide-react";
+import { Wallet as WalletIcon, ArrowDownCircle, ArrowUpCircle, Landmark, History, TrendingUp, Clock, Copy, CheckCircle2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { SponsorPanel } from "@/components/profile/SponsorPanel";
 
@@ -17,13 +17,18 @@ export default function WalletPage() {
     const navigate = useNavigate();
 
     const [balance, setBalance] = useState<number>(0);
-    const [blockedBalance, setBlockedBalance] = useState<number>(0); // NOVO: Estado para o saldo bloqueado
+    const [blockedBalance, setBlockedBalance] = useState<number>(0);
 
     const [depositAmount, setDepositAmount] = useState("");
     const [withdrawAmount, setWithdrawAmount] = useState("");
     const [pixKey, setPixKey] = useState("");
     const [processing, setProcessing] = useState(false);
     const [transactions, setTransactions] = useState<any[]>([]);
+
+    // ESTADOS DO ASAAS
+    const [pixData, setPixData] = useState<{ encodedImage: string, payload: string } | null>(null);
+    const [copied, setCopied] = useState(false);
+    const [initialBalance, setInitialBalance] = useState<number | null>(null); // NOVO: Guarda o saldo para comparar
 
     useEffect(() => {
         if (!loading && !user) {
@@ -33,9 +38,41 @@ export default function WalletPage() {
         }
     }, [user, loading, navigate]);
 
+    // NOVO: O "Espião" que verifica o pagamento automaticamente
+    useEffect(() => {
+        let interval: NodeJS.Timeout;
+
+        const checkPayment = async () => {
+            if (!user || initialBalance === null) return;
+
+            const { data } = await supabase
+                .from('wallets')
+                .select('balance')
+                .eq('user_id', user.id)
+                .maybeSingle();
+
+            // Se o saldo atual for maior que o saldo de antes de gerar o PIX...
+            if (data && data.balance > initialBalance) {
+                setPixData(null); // Esconde o QR Code
+                setInitialBalance(null); // Reseta o verificador
+                setDepositAmount(""); // Limpa o campo de valor
+                toast.success("Pagamento aprovado! Saldo creditado na sua conta.");
+                loadWalletData(); // Atualiza os números e o histórico na tela
+            }
+        };
+
+        if (pixData) {
+            // Se o QR Code está na tela, verifica o banco a cada 3 segundos
+            interval = setInterval(checkPayment, 3000);
+        }
+
+        return () => {
+            if (interval) clearInterval(interval);
+        };
+    }, [pixData, user, initialBalance]);
+
     const loadWalletData = async () => {
         try {
-            // 1. Busca o saldo disponível
             const { data: wallet } = await supabase
                 .from('wallets')
                 .select('balance')
@@ -44,7 +81,6 @@ export default function WalletPage() {
 
             setBalance(wallet?.balance || 0);
 
-            // 2. Busca o saldo bloqueado em ordens de ATIVOS
             const { data: pendingAssets } = await supabase
                 .from('pending_asset_purchases')
                 .select('quantity, limit_price')
@@ -56,7 +92,6 @@ export default function WalletPage() {
                 blocked += pendingAssets.reduce((acc, order) => acc + (order.quantity * order.limit_price), 0);
             }
 
-            // 3. Busca o saldo bloqueado em ordens antigas de ATLETAS (para garantir compatibilidade)
             const { data: pendingAthletes } = await supabase
                 .from('pending_purchases')
                 .select('quantity, limit_price')
@@ -69,7 +104,6 @@ export default function WalletPage() {
 
             setBlockedBalance(blocked);
 
-            // 4. Busca histórico de depósitos/saques
             const { data: txs } = await supabase
                 .from('fiat_transactions')
                 .select('*')
@@ -104,30 +138,56 @@ export default function WalletPage() {
 
         setProcessing(true);
         try {
-            // Simulação de delay de gateway de pagamento (Futuro Mercado Pago)
-            await new Promise(resolve => setTimeout(resolve, 1500));
+            if (type === 'deposit') {
+                const { data, error } = await supabase.functions.invoke('create-asaas-payment', {
+                    body: { amount: amount }
+                });
 
-            const { data, error } = await supabase.rpc('handle_fiat_transaction', {
-                p_type: type,
-                p_amount: amount
-            });
+                if (error) throw error;
 
-            if (error) throw error;
-
-            if (data?.success) {
-                toast.success(type === 'deposit' ? 'Depósito realizado com sucesso!' : 'Saque enviado para sua conta!');
-                setDepositAmount("");
-                setWithdrawAmount("");
-                setPixKey("");
-                loadWalletData();
+                if (data?.success) {
+                    setInitialBalance(balance); // Salva o saldo de agora para comparar depois
+                    setPixData({
+                        encodedImage: data.encodedImage,
+                        payload: data.payload
+                    });
+                    toast.info("Aguardando o pagamento do PIX...");
+                } else {
+                    toast.error(data?.message || "Erro ao gerar PIX");
+                }
             } else {
-                toast.error(data?.message || "Erro ao processar transação");
+                await new Promise(resolve => setTimeout(resolve, 1500));
+
+                const { data, error } = await supabase.rpc('handle_fiat_transaction', {
+                    p_type: type,
+                    p_amount: amount
+                });
+
+                if (error) throw error;
+
+                if (data?.success) {
+                    toast.success('Saque enviado para sua conta!');
+                    setWithdrawAmount("");
+                    setPixKey("");
+                    loadWalletData();
+                } else {
+                    toast.error(data?.message || "Erro ao processar transação");
+                }
             }
         } catch (error: any) {
             toast.error("Ocorreu um erro no sistema.");
             console.error(error);
         } finally {
             setProcessing(false);
+        }
+    };
+
+    const copyToClipboard = () => {
+        if (pixData) {
+            navigator.clipboard.writeText(pixData.payload);
+            setCopied(true);
+            toast.success("Código PIX copiado!");
+            setTimeout(() => setCopied(false), 3000);
         }
     };
 
@@ -145,15 +205,13 @@ export default function WalletPage() {
                             Minha Carteira
                         </h1>
                         <p className="text-muted-foreground">
-                            Gerencie seus fundos para comprar e vender tokens de atletas.
+                            Gerencie os seus fundos para comprar e vender tokens de atletas.
                         </p>
                     </div>
 
                     <div className="grid md:grid-cols-3 gap-6">
-                        {/* Coluna Esquerda: Saldo e Ações */}
                         <div className="md:col-span-2 space-y-6">
 
-                            {/* Card de Saldo */}
                             <Card className="bg-gradient-to-br from-card to-card/50 border-primary/20 shadow-lg">
                                 <CardContent className="p-8">
                                     <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
@@ -164,7 +222,6 @@ export default function WalletPage() {
                                             </h2>
                                         </div>
 
-                                        {/* NOVO: Exibição do Saldo Bloqueado */}
                                         {blockedBalance > 0 && (
                                             <div className="flex items-center gap-2 bg-muted/50 border rounded-lg p-3 text-sm">
                                                 <Clock className="w-4 h-4 text-amber-500" />
@@ -178,7 +235,6 @@ export default function WalletPage() {
                                 </CardContent>
                             </Card>
 
-                            {/* Abas de Operação */}
                             <Tabs defaultValue="deposit" className="w-full">
                                 <TabsList className="grid w-full grid-cols-2">
                                     <TabsTrigger value="deposit">Depositar</TabsTrigger>
@@ -193,27 +249,70 @@ export default function WalletPage() {
                                                 Adicionar Fundos
                                             </CardTitle>
                                             <CardDescription>
-                                                Adicione saldo via PIX para começar a investir. (Integração Mercado Pago em breve)
+                                                Adicione saldo via PIX com processamento Asaas.
                                             </CardDescription>
                                         </CardHeader>
                                         <CardContent className="space-y-4">
-                                            <div className="space-y-2">
-                                                <Label>Valor do Depósito (R$)</Label>
-                                                <Input
-                                                    type="number"
-                                                    placeholder="0.00"
-                                                    value={depositAmount}
-                                                    onChange={(e) => setDepositAmount(e.target.value)}
-                                                />
-                                            </div>
-                                            <Button
-                                                className="w-full"
-                                                size="lg"
-                                                onClick={() => handleTransaction('deposit')}
-                                                disabled={processing}
-                                            >
-                                                {processing ? 'Processando...' : 'Gerar PIX Copia e Cola'}
-                                            </Button>
+                                            {!pixData ? (
+                                                <>
+                                                    <div className="space-y-2">
+                                                        <Label>Valor do Depósito (R$)</Label>
+                                                        <Input
+                                                            type="number"
+                                                            placeholder="0.00"
+                                                            value={depositAmount}
+                                                            onChange={(e) => setDepositAmount(e.target.value)}
+                                                            disabled={processing}
+                                                        />
+                                                    </div>
+                                                    <Button
+                                                        className="w-full"
+                                                        size="lg"
+                                                        onClick={() => handleTransaction('deposit')}
+                                                        disabled={processing || !depositAmount}
+                                                    >
+                                                        {processing ? 'A gerar...' : 'Gerar PIX Copia e Cola'}
+                                                    </Button>
+                                                </>
+                                            ) : (
+                                                <div className="flex flex-col items-center space-y-4 animate-in fade-in zoom-in duration-300">
+                                                    <h3 className="font-semibold text-lg text-center">Leia o QR Code</h3>
+
+                                                    <div className="bg-white p-2 rounded-xl">
+                                                        <img
+                                                            src={`data:image/jpeg;base64,${pixData.encodedImage}`}
+                                                            alt="QR Code PIX"
+                                                            className="w-48 h-48"
+                                                        />
+                                                    </div>
+
+                                                    {/* NOVO: Feedback visual enquanto aguarda */}
+                                                    <div className="flex items-center gap-2 text-amber-500 font-medium animate-pulse">
+                                                        <Loader2 className="w-5 h-5 animate-spin" />
+                                                        <span>Aguardando confirmação do pagamento...</span>
+                                                    </div>
+
+                                                    <div className="w-full space-y-2 mt-2">
+                                                        <Label>Ou utilize o PIX Copia e Cola:</Label>
+                                                        <div className="flex gap-2">
+                                                            <Input value={pixData.payload} readOnly className="font-mono text-xs" />
+                                                            <Button variant="secondary" onClick={copyToClipboard}>
+                                                                {copied ? <CheckCircle2 className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="flex w-full gap-2 mt-4">
+                                                        <Button variant="outline" className="w-full" onClick={() => {
+                                                            setPixData(null);
+                                                            setInitialBalance(null);
+                                                            loadWalletData();
+                                                        }}>
+                                                            Cancelar
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            )}
                                         </CardContent>
                                     </Card>
                                 </TabsContent>
@@ -226,15 +325,15 @@ export default function WalletPage() {
                                                 Sacar Fundos
                                             </CardTitle>
                                             <CardDescription>
-                                                Transfira seu saldo disponível direto para sua conta bancária.
+                                                Transfira o seu saldo disponível direto para a sua conta bancária.
                                             </CardDescription>
                                         </CardHeader>
                                         <CardContent className="space-y-4">
                                             <div className="space-y-2">
-                                                <Label>Chave PIX (CPF, Email, Telefone ou Aleatória)</Label>
+                                                <Label>Chave PIX (CPF, Email, Telemóvel ou Aleatória)</Label>
                                                 <Input
                                                     type="text"
-                                                    placeholder="Sua chave PIX"
+                                                    placeholder="A sua chave PIX"
                                                     value={pixKey}
                                                     onChange={(e) => setPixKey(e.target.value)}
                                                 />
@@ -259,7 +358,7 @@ export default function WalletPage() {
                                                 onClick={() => handleTransaction('withdraw')}
                                                 disabled={processing || balance <= 0}
                                             >
-                                                {processing ? 'Processando...' : 'Solicitar Saque'}
+                                                {processing ? 'A processar...' : 'Solicitar Saque'}
                                             </Button>
                                         </CardContent>
                                     </Card>
@@ -267,7 +366,6 @@ export default function WalletPage() {
                             </Tabs>
                         </div>
 
-                        {/* Coluna Direita: Histórico Recente */}
                         <div className="md:col-span-1">
                             <Card className="h-full">
                                 <CardHeader>
@@ -311,14 +409,13 @@ export default function WalletPage() {
 
                     </div>
 
-                    {/* Seção de Investimentos (SponsorPanel) */}
                     <div className="mt-16 mb-6">
                         <h2 className="text-3xl font-bold flex items-center gap-3 mb-2">
                             <TrendingUp className="w-8 h-8 text-primary" />
-                            Meus Investimentos
+                            Os meus Investimentos
                         </h2>
                         <p className="text-muted-foreground">
-                            Acompanhe seu rendimento, sua carteira de tokens e o histórico de negociações.
+                            Acompanhe o seu rendimento, a sua carteira de tokens e o histórico de negociações.
                         </p>
                     </div>
 
