@@ -19,6 +19,7 @@ import WalletPage from "./pages/Wallet";
 import Vitrine from "./pages/Vitrine";
 import AthleteProfileVitrine from "./pages/AthleteProfileVitrine";
 import AssetTradePage from "./pages/AssetTradePage";
+import Settings from "./pages/Settings";
 
 const queryClient = new QueryClient();
 
@@ -41,6 +42,7 @@ function App() {
               <Route path="/profile" element={<Profile />} />
               <Route path="/watchlist" element={<Watchlist />} />
               <Route path="/wallet" element={<WalletPage />} />
+              <Route path="/settings" element={<Settings />} />
               <Route path="/vitrine" element={<Vitrine />} />
               <Route path="/vitrine-atleta/:id" element={<AthleteProfileVitrine />} />
               <Route path="/ativo/:assetId" element={<AssetTradePage />} />

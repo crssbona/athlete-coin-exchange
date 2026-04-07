@@ -82,7 +82,7 @@ export const Navbar = () => {
           <UserCircle className="w-4 h-4 mr-2" />
           Meu Perfil
         </DropdownMenuItem>
-        <DropdownMenuItem>
+        <DropdownMenuItem onClick={() => navigate('/settings')}>
           <Settings className="w-4 h-4 mr-2" />
           Configurações
         </DropdownMenuItem>
@@ -203,7 +203,7 @@ export const Navbar = () => {
                           <button onClick={() => handleNavigation('/profile')} className="flex items-center gap-3 text-muted-foreground hover:text-primary transition-colors text-left w-full py-1">
                             <UserCircle className="w-4 h-4" /> Editar Perfil
                           </button>
-                          <button className="flex items-center gap-3 text-muted-foreground hover:text-primary transition-colors text-left w-full py-1">
+                          <button onClick={() => handleNavigation('/settings')} className="flex items-center gap-3 text-muted-foreground hover:text-primary transition-colors text-left w-full py-1">
                             <Settings className="w-4 h-4" /> Configurações
                           </button>
                           <button onClick={handleSignOut} className="flex items-center gap-3 text-destructive hover:text-destructive/80 transition-colors text-left w-full mt-2 pt-4 border-t border-border/50">
