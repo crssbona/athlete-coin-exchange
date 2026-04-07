@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Wallet as WalletIcon, ArrowDownCircle, ArrowUpCircle, Landmark, History, TrendingUp, Clock, Copy, CheckCircle2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { SponsorPanel } from "@/components/profile/SponsorPanel";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export default function WalletPage() {
     const { user, loading } = useAuth();
@@ -22,6 +23,7 @@ export default function WalletPage() {
     const [depositAmount, setDepositAmount] = useState("");
     const [withdrawAmount, setWithdrawAmount] = useState("");
     const [pixKey, setPixKey] = useState("");
+    const [pixKeyType, setPixKeyType] = useState<string>("CPF");
     const [processing, setProcessing] = useState(false);
     const [transactions, setTransactions] = useState<any[]>([]);
 
@@ -191,6 +193,62 @@ export default function WalletPage() {
         }
     };
 
+    const handleWithdrawal = async () => {
+        const amount = parseFloat(withdrawAmount);
+
+        if (!amount || amount < 5) {
+            toast.error("O valor mínimo para saque é de R$ 5,00.");
+            return;
+        }
+        if (!pixKey) {
+            toast.error("Por favor, preencha a chave PIX.");
+            return;
+        }
+        if (amount > balance) {
+            toast.error("Saldo insuficiente para este saque.");
+            return;
+        }
+
+        setProcessing(true);
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session) throw new Error("Sessão não encontrada.");
+
+            // Pega a URL do Supabase (certifique-se de usar a URL do seu projeto)
+            const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://mwumwryacppddvfwulok.supabase.co';
+
+            const response = await fetch(`${supabaseUrl}/functions/v1/create-withdrawal`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${session.access_token}`
+                },
+                body: JSON.stringify({
+                    amount: amount,
+                    pixKey: pixKey,
+                    pixKeyType: pixKeyType
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                toast.success(data.message);
+                setWithdrawAmount("");
+                setPixKey("");
+                // Atualiza o saldo localmente subtraindo o valor sacado para refletir na tela imediatamente
+                setBalance(prev => prev - amount);
+            } else {
+                toast.error(data.message || "Erro ao solicitar saque.");
+            }
+        } catch (error: any) {
+            console.error(error);
+            toast.error("Erro de conexão ao solicitar saque.");
+        } finally {
+            setProcessing(false);
+        }
+    };
+
     if (loading) return null;
 
     return (
@@ -318,50 +376,65 @@ export default function WalletPage() {
                                 </TabsContent>
 
                                 <TabsContent value="withdraw">
-                                    <Card>
-                                        <CardHeader>
-                                            <CardTitle className="flex items-center gap-2">
-                                                <ArrowUpCircle className="w-5 h-5 text-blue-500" />
-                                                Sacar Fundos
-                                            </CardTitle>
-                                            <CardDescription>
-                                                Transfira o seu saldo disponível direto para a sua conta bancária.
-                                            </CardDescription>
-                                        </CardHeader>
-                                        <CardContent className="space-y-4">
-                                            <div className="space-y-2">
-                                                <Label>Chave PIX (CPF, Email, Telemóvel ou Aleatória)</Label>
-                                                <Input
-                                                    type="text"
-                                                    placeholder="A sua chave PIX"
-                                                    value={pixKey}
-                                                    onChange={(e) => setPixKey(e.target.value)}
-                                                />
-                                            </div>
-                                            <div className="space-y-2">
-                                                <Label>Valor do Saque (R$)</Label>
-                                                <Input
-                                                    type="number"
-                                                    placeholder="0.00"
-                                                    value={withdrawAmount}
-                                                    max={balance}
-                                                    onChange={(e) => setWithdrawAmount(e.target.value)}
-                                                />
-                                                <p className="text-xs text-muted-foreground text-right">
-                                                    Disponível: R$ {balance.toFixed(2)}
-                                                </p>
-                                            </div>
-                                            <Button
-                                                className="w-full"
-                                                size="lg"
-                                                variant="secondary"
-                                                onClick={() => handleTransaction('withdraw')}
-                                                disabled={processing || balance <= 0}
-                                            >
-                                                {processing ? 'A processar...' : 'Solicitar Saque'}
-                                            </Button>
-                                        </CardContent>
-                                    </Card>
+                                    <div className="space-y-4 mt-4">
+                                        <div className="space-y-2">
+                                            <Label htmlFor="withdraw-amount">Valor do Saque (R$)</Label>
+                                            <Input
+                                                id="withdraw-amount"
+                                                type="number"
+                                                placeholder="0.00"
+                                                min="5"
+                                                step="0.01"
+                                                value={withdrawAmount}
+                                                onChange={(e) => setWithdrawAmount(e.target.value)}
+                                                disabled={processing}
+                                            />
+                                            <p className="text-xs text-muted-foreground">Valor mínimo: R$ 5,00</p>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <Label>Tipo de Chave PIX</Label>
+                                            <Select value={pixKeyType} onValueChange={setPixKeyType} disabled={processing}>
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="Selecione o tipo" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="CPF">CPF</SelectItem>
+                                                    <SelectItem value="CNPJ">CNPJ</SelectItem>
+                                                    <SelectItem value="EMAIL">E-mail</SelectItem>
+                                                    <SelectItem value="PHONE">Telefone / Celular</SelectItem>
+                                                    <SelectItem value="EVP">Chave Aleatória (EVP)</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <Label htmlFor="pix-key">Sua Chave PIX</Label>
+                                            <Input
+                                                id="pix-key"
+                                                type="text"
+                                                placeholder="Digite sua chave PIX"
+                                                value={pixKey}
+                                                onChange={(e) => setPixKey(e.target.value)}
+                                                disabled={processing}
+                                            />
+                                        </div>
+
+                                        <Button
+                                            className="w-full"
+                                            onClick={handleWithdrawal}
+                                            disabled={processing || !withdrawAmount || !pixKey}
+                                        >
+                                            {processing ? (
+                                                <>
+                                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                    Processando...
+                                                </>
+                                            ) : (
+                                                "Solicitar Saque via PIX"
+                                            )}
+                                        </Button>
+                                    </div>
                                 </TabsContent>
                             </Tabs>
                         </div>
