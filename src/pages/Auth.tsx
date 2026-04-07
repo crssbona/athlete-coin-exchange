@@ -240,20 +240,23 @@ const Auth = () => {
     if (data?.user) {
       const { error: profileError } = await supabase
         .from('profiles')
-        .insert({
+        .upsert({
           id: data.user.id,
-          name: `${firstName} ${lastName}`.trim(),
-          phone: finalPhone, // Usa o telefone combinado
+          full_name: `${firstName} ${lastName}`.trim(),
+          phone: finalPhone,
           document: documentNumber,
+          document_type: docType,
+          document_number: documentNumber,
           active_role: 'sponsor'
         });
 
       if (profileError) {
         console.error('Error creating profile:', profileError);
+        toast.error("Conta criada, mas houve um erro ao salvar seus dados. Entre em contato com o suporte.");
       }
     }
 
-    toast.success("Conta criada com sucesso! Verifique seu email para confirmar.");
+    toast.success("Conta criada com sucesso!");
   };
 
   return (
