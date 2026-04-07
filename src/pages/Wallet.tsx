@@ -236,8 +236,18 @@ export default function WalletPage() {
                 toast.success(data.message);
                 setWithdrawAmount("");
                 setPixKey("");
-                // Atualiza o saldo localmente subtraindo o valor sacado para refletir na tela imediatamente
                 setBalance(prev => prev - amount);
+
+                // === MÁGICA VISUAL: Adiciona a transação na lista imediatamente ===
+                const novaTransacao = {
+                    id: String(Date.now()),
+                    type: 'withdrawal',
+                    amount: amount,
+                    status: 'completed',
+                    created_at: new Date().toISOString()
+                };
+                setTransactions(prev => [novaTransacao, ...prev]);
+                // ==================================================================
             } else {
                 toast.error(data.message || "Erro ao solicitar saque.");
             }
