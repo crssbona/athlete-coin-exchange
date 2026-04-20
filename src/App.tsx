@@ -20,6 +20,7 @@ import Vitrine from "./pages/Vitrine";
 import AthleteProfileVitrine from "./pages/AthleteProfileVitrine";
 import AssetTradePage from "./pages/AssetTradePage";
 import Settings from "./pages/Settings";
+import AdminDashboard from "./pages/AdminDashboard";
 
 const queryClient = new QueryClient();
 
@@ -46,7 +47,7 @@ function App() {
               <Route path="/vitrine" element={<Vitrine />} />
               <Route path="/vitrine-atleta/:id" element={<AthleteProfileVitrine />} />
               <Route path="/ativo/:assetId" element={<AssetTradePage />} />
-              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+              <Route path="/admin-secret-access" element={<AdminDashboard />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>
