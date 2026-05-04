@@ -407,18 +407,33 @@ export default function AdminDashboard() {
                         {selectedUser && (
                             <>
                                 <SheetHeader className="mb-6">
-                                    <div className="flex justify-between items-start">
-                                        <div>
-                                            <SheetTitle className="text-2xl">{selectedUser.name || "Usuário sem nome"}</SheetTitle>
-                                            <SheetDescription className="flex items-center gap-2 mt-1">
-                                                <span className="font-mono text-xs">{selectedUser.id}</span>
-                                                <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => copyToClipboard(selectedUser.id)}>
-                                                    <Copy className="h-3 w-3" />
-                                                </Button>
-                                            </SheetDescription>
+                                    <div className="flex flex-col">
+                                        {/* Agrupamos o Nome e o Status lado a lado */}
+                                        <div className="flex items-center gap-3">
+                                            <SheetTitle className="text-2xl">
+                                                {selectedUser.name || "Usuário sem nome"}
+                                            </SheetTitle>
+
+                                            {/* Tag Dinâmica de Status */}
+                                            {selectedUser.is_blocked ? (
+                                                <Badge variant="destructive" className="bg-red-500 hover:bg-red-600 shadow-sm">
+                                                    Conta Bloqueada
+                                                </Badge>
+                                            ) : (
+                                                <Badge variant="default" className="bg-green-500 hover:bg-green-600 shadow-sm">
+                                                    Conta Ativa
+                                                </Badge>
+                                            )}
                                         </div>
-                                        <Badge variant="default" className="bg-green-500 hover:bg-green-600">Conta Ativa</Badge>
+
+                                        <SheetDescription className="flex items-center gap-2 mt-2">
+                                            <span className="font-mono text-xs">{selectedUser.id}</span>
+                                            <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => copyToClipboard(selectedUser.id)}>
+                                                <Copy className="h-3 w-3" />
+                                            </Button>
+                                        </SheetDescription>
                                     </div>
+
                                     <div className="grid grid-cols-2 gap-4 mt-4 text-sm">
                                         <div>
                                             <span className="text-muted-foreground block text-xs">CPF</span>
