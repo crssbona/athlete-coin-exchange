@@ -29,7 +29,7 @@ interface Order {
 const AssetTradePage = () => {
     const { assetId } = useParams();
     const navigate = useNavigate();
-    const { user } = useAuth();
+    const { user, isBlocked } = useAuth();
 
     const [asset, setAsset] = useState<any>(null);
     const [athleteInfo, setAthleteInfo] = useState<any>(null);
@@ -224,6 +224,10 @@ const AssetTradePage = () => {
     }, [asset?.id, timeframe, asset?.tokenPrice]);
 
     const handleBuy = async () => {
+        if (isBlocked) {
+            toast.error("Sua conta está suspensa. Negociações no mercado foram bloqueadas.");
+            return;
+        }
         if (!user) {
             toast.error("Precisa de iniciar sessão para investir neste ativo");
             navigate("/auth");
@@ -561,7 +565,7 @@ const AssetTradePage = () => {
                                             <span className="text-2xl font-bold">R$ {totalAtLimit.toFixed(2)}</span>
                                         </div>
 
-                                        <Button variant="buy" size="lg" className="w-full text-lg h-14" onClick={handleBuy} disabled={buying}>
+                                        <Button variant="buy" size="lg" className="w-full text-lg h-14" onClick={handleBuy} disabled={buying || isBlocked}>
                                             {buying ? 'A processar...' : 'Confirmar Compra'}
                                         </Button>
                                     </div>

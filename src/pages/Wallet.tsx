@@ -13,8 +13,9 @@ import { toast } from "sonner";
 import { SponsorPanel } from "@/components/profile/SponsorPanel";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
+
 export default function WalletPage() {
-    const { user, loading } = useAuth();
+    const { user, loading, isBlocked } = useAuth();
     const navigate = useNavigate();
 
     const [balance, setBalance] = useState<number>(0);
@@ -31,6 +32,7 @@ export default function WalletPage() {
     const [pixData, setPixData] = useState<{ encodedImage: string, payload: string } | null>(null);
     const [copied, setCopied] = useState(false);
     const [initialBalance, setInitialBalance] = useState<number | null>(null); // NOVO: Guarda o saldo para comparar
+
 
     useEffect(() => {
         if (!loading && !user) {
@@ -120,6 +122,10 @@ export default function WalletPage() {
     };
 
     const handleTransaction = async (type: 'deposit' | 'withdraw') => {
+        if (isBlocked) {
+            toast.error("Conta suspensa. Funcionalidades financeiras bloqueadas.");
+            return;
+        }
         const amountStr = type === 'deposit' ? depositAmount : withdrawAmount;
         const amount = parseFloat(amountStr);
 
@@ -194,6 +200,10 @@ export default function WalletPage() {
     };
 
     const handleWithdrawal = async () => {
+        if (isBlocked) {
+            toast.error("Conta suspensa. Saques bloqueados.");
+            return;
+        }
         const amount = parseFloat(withdrawAmount);
 
         if (!amount || amount < 5) {
@@ -337,7 +347,7 @@ export default function WalletPage() {
                                                         className="w-full"
                                                         size="lg"
                                                         onClick={() => handleTransaction('deposit')}
-                                                        disabled={processing || !depositAmount}
+                                                        disabled={processing || !depositAmount || isBlocked}
                                                     >
                                                         {processing ? 'A gerar...' : 'Gerar PIX Copia e Cola'}
                                                     </Button>
@@ -433,7 +443,7 @@ export default function WalletPage() {
                                         <Button
                                             className="w-full"
                                             onClick={handleWithdrawal}
-                                            disabled={processing || !withdrawAmount || !pixKey}
+                                            disabled={processing || !withdrawAmount || !pixKey || isBlocked}
                                         >
                                             {processing ? (
                                                 <>
@@ -464,26 +474,43 @@ export default function WalletPage() {
                                         </p>
                                     ) : (
                                         <div className="space-y-4 max-h-[350px] overflow-y-auto pr-2 scrollbar-thin">
-                                            {transactions.map((tx) => (
-                                                <div key={tx.id} className="flex items-center justify-between pb-4 border-b last:border-0 last:pb-0">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className={`p-2 rounded-full ${tx.type === 'deposit' ? 'bg-green-500/20 text-green-500' : 'bg-blue-500/20 text-blue-500'}`}>
-                                                            {tx.type === 'deposit' ? <ArrowDownCircle className="w-4 h-4" /> : <ArrowUpCircle className="w-4 h-4" />}
+                                            {transactions.map((tx) => {
+                                                const isDeposit = tx.type === 'deposit';
+                                                const isManualAdjustment = !!tx.description;
+
+                                                return (
+                                                    <div key={tx.id} className="flex items-center justify-between pb-4 border-b last:border-0 last:pb-0">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className={`p-2 rounded-full ${isDeposit ? 'bg-green-500/20 text-green-500' : 'bg-red-500/20 text-red-500'}`}>
+                                                                {isDeposit ? <ArrowDownCircle className="w-4 h-4" /> : <ArrowUpCircle className="w-4 h-4" />}
+                                                            </div>
+                                                            <div>
+                                                                {/* Define o título baseado na origem da transação */}
+                                                                <p className="text-sm font-medium">
+                                                                    {isManualAdjustment
+                                                                        ? (isDeposit ? 'Crédito do Opatrocinador' : 'Débito do Opatrocinador')
+                                                                        : (isDeposit ? 'Depósito PIX' : 'Saque PIX')
+                                                                    }
+                                                                </p>
+
+                                                                {/* Exibe o motivo caso seja ajuste da equipe */}
+                                                                {isManualAdjustment && (
+                                                                    <p className="text-[11px] font-semibold text-muted-foreground mt-0.5 max-w-[150px] truncate" title={tx.description}>
+                                                                        Motivo: {tx.description}
+                                                                    </p>
+                                                                )}
+
+                                                                <p className="text-xs text-muted-foreground mt-0.5">
+                                                                    {new Date(tx.created_at).toLocaleDateString('pt-BR')}
+                                                                </p>
+                                                            </div>
                                                         </div>
-                                                        <div>
-                                                            <p className="text-sm font-medium">
-                                                                {tx.type === 'deposit' ? 'Depósito PIX' : 'Saque PIX'}
-                                                            </p>
-                                                            <p className="text-xs text-muted-foreground">
-                                                                {new Date(tx.created_at).toLocaleDateString('pt-BR')}
-                                                            </p>
-                                                        </div>
+                                                        <p className={`font-semibold ${isDeposit ? 'text-green-500' : 'text-foreground'}`}>
+                                                            {isDeposit ? '+' : '-'} R$ {Math.abs(tx.amount).toFixed(2)}
+                                                        </p>
                                                     </div>
-                                                    <p className={`font-semibold ${tx.type === 'deposit' ? 'text-green-500' : 'text-foreground'}`}>
-                                                        {tx.type === 'deposit' ? '+' : '-'} R$ {tx.amount.toFixed(2)}
-                                                    </p>
-                                                </div>
-                                            ))}
+                                                );
+                                            })}
                                         </div>
                                     )}
                                 </CardContent>

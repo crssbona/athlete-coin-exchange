@@ -94,6 +94,14 @@ export default function Profile() {
       <Navbar />
       <div className="min-h-screen pt-20 pb-12 bg-background">
         <div className="container mx-auto px-4">
+
+          {/* AVISO DE BLOQUEIO */}
+          {(profile as any)?.is_blocked && (
+            <div className="bg-red-500/10 border-2 border-red-500 text-red-500 p-4 rounded-lg mb-6 flex items-center font-medium">
+              Sua conta está suspensa. Você não pode gerar, editar ou gerenciar ativos neste momento. Entre em contato com o suporte.
+            </div>
+          )}
+
           {/* Profile Header */}
           <Card className="mb-6">
             <CardHeader>
@@ -111,8 +119,10 @@ export default function Profile() {
             </CardHeader>
           </Card>
 
-          {/* Painel Exclusivo do Atleta */}
-          <SponsoredPanel userId={user?.id || ''} profile={profile} />
+          {/* Painel Exclusivo do Atleta COM TRAVA VISUAL */}
+          <div className={(profile as any)?.is_blocked ? "opacity-50 pointer-events-none grayscale" : ""}>
+            <SponsoredPanel userId={user?.id || ''} profile={profile} />
+          </div>
         </div>
       </div>
     </>

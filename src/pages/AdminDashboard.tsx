@@ -83,7 +83,7 @@ export default function AdminDashboard() {
             setPlatformBalance(settings?.treasury_balance || 0);
 
             const { data, error } = await supabase.from('profiles').select(`
-                id, name, document, phone,
+                id, name, document, phone, is_blocked,
                 wallets (balance)
             `);
 
@@ -168,16 +168,103 @@ export default function AdminDashboard() {
 
         const amount = Number(adjustAmount);
         const isCredit = adjustType === "credit";
+        const txType = isCredit ? 'deposit' : 'withdraw';
 
         setProcessing(true);
         try {
-            toast.success(`${isCredit ? 'Crédito' : 'Débito'} de R$ ${amount.toFixed(2)} aplicado (Emulação).`);
+            // 1. Pegar o saldo atual da carteira de forma segura
+            const { data: walletData, error: walletError } = await supabase
+                .from('wallets')
+                .select('balance')
+                .eq('user_id', selectedUser.id)
+                .maybeSingle(); // maybeSingle() não quebra o código se a carteira não existir
+
+            if (walletError) throw walletError;
+
+            // Se o usuário não tiver carteira, o saldo atual é 0
+            const currentBalance = walletData ? Number(walletData.balance) : 0;
+            const newBalance = isCredit ? currentBalance + amount : currentBalance - amount;
+
+            // 2. Criar ou Atualizar o saldo na carteira (upsert)
+            const { error: updateError } = await supabase
+                .from('wallets')
+                .upsert({
+                    user_id: selectedUser.id,
+                    balance: newBalance
+                }, { onConflict: 'user_id' }); // Se o user_id já existir, ele atualiza o balance. Se não, ele cria.
+
+            if (updateError) throw updateError;
+
+            // 3. Registrar o histórico na tabela fiat_transactions
+            const { error: txError } = await supabase
+                .from('fiat_transactions')
+                .insert({
+                    user_id: selectedUser.id,
+                    type: txType,
+                    amount: isCredit ? amount : -amount,
+                    status: 'completed',
+                    description: adjustReason
+                });
+
+            if (txError) throw txError;
+
+            toast.success(`${isCredit ? 'Crédito' : 'Débito'} de R$ ${amount.toFixed(2)} aplicado com sucesso.`);
             setAdjustAmount("");
             setAdjustReason("");
+
+            // Atualiza os dados
             loadAdminData();
             fetchUserDetails(selectedUser.id);
+
+            // Atualiza o estado local para refletir na tela imediatamente
+            setSelectedUser({
+                ...selectedUser,
+                wallets: { balance: newBalance }
+            });
+
         } catch (error) {
-            toast.error("Erro ao ajustar saldo.");
+            console.error("Erro completo:", error);
+            toast.error("Erro ao ajustar saldo. Verifique o console.");
+        } finally {
+            setProcessing(false);
+        }
+    };
+
+    const handleToggleBlock = async () => {
+        // Pega o status inverso do atual de forma segura (forçando para booleano)
+        const newStatus = !!!selectedUser.is_blocked;
+
+        setProcessing(true);
+        try {
+            console.log(`Tentando mudar o status is_blocked do usuário ${selectedUser.id} para:`, newStatus);
+
+            const { data, error } = await supabase
+                .from('profiles')
+                .update({ is_blocked: newStatus })
+                .eq('id', selectedUser.id)
+                .select(); // Adicionamos o .select() para forçar o Supabase a retornar a linha alterada
+
+            if (error) {
+                console.error("Erro do Supabase ao bloquear:", error);
+                throw error;
+            }
+
+            // Validação de segurança extra: se retornou vazio, a atualização foi bloqueada pelo RLS
+            if (!data || data.length === 0) {
+                throw new Error("A atualização foi rejeitada pelas políticas de segurança do banco (RLS).");
+            }
+
+            toast.success(newStatus ? "Conta bloqueada com sucesso." : "Conta desbloqueada com sucesso.");
+
+            // Atualiza a ficha atual para refletir o novo status REAL que veio do banco
+            setSelectedUser({ ...selectedUser, is_blocked: newStatus });
+
+            // Recarrega a lista de usuários para atualizar a tabela principal
+            loadAdminData();
+
+        } catch (error: any) {
+            console.error("Catch error handleToggleBlock:", error);
+            toast.error(error.message || "Erro ao alterar o status da conta. Verifique o console.");
         } finally {
             setProcessing(false);
         }
@@ -294,7 +381,12 @@ export default function AdminDashboard() {
                                                 </Tooltip>
                                             </TooltipProvider>
                                         </TableCell>
-                                        <TableCell className="font-medium">{u.name || "Sem nome"}</TableCell>
+                                        <TableCell className="font-medium">
+                                            {u.name || "Sem nome"}
+                                            {u.is_blocked && (
+                                                <Badge variant="destructive" className="ml-2 text-[10px] h-5">Bloqueado</Badge>
+                                            )}
+                                        </TableCell>
                                         <TableCell>{u.document || "---"}</TableCell>
                                         <TableCell>{u.phone || "---"}</TableCell>
                                         <TableCell>R$ {(u.wallets?.balance ?? u.wallets?.[0]?.balance ?? 0).toFixed(2)}</TableCell>
@@ -379,7 +471,18 @@ export default function AdminDashboard() {
                                                                                 {isCredit ? <ArrowDownRight className="h-4 w-4 text-green-500" /> : <ArrowUpRight className="h-4 w-4 text-red-500" />}
                                                                             </div>
                                                                             <div>
-                                                                                <p className="text-sm font-medium capitalize">{tx.type.replace('_', ' ')}</p>
+                                                                                {/* Define um nome claro para a transação */}
+                                                                                <p className="text-sm font-medium capitalize">
+                                                                                    {tx.type === 'deposit' ? 'Crédito / Depósito' : 'Débito / Saque'}
+                                                                                </p>
+
+                                                                                {/* Exibe o motivo do ajuste manual, caso exista */}
+                                                                                {tx.description && (
+                                                                                    <p className="text-xs font-semibold text-muted-foreground mt-0.5">
+                                                                                        Motivo: {tx.description}
+                                                                                    </p>
+                                                                                )}
+
                                                                                 <p className="text-xs text-muted-foreground">{formatDate(tx.created_at)}</p>
                                                                             </div>
                                                                         </div>
@@ -542,16 +645,26 @@ export default function AdminDashboard() {
                                             </CardContent>
                                         </Card>
 
-                                        <Card className="border-red-500/50">
+                                        <Card className={selectedUser.is_blocked ? "border-green-500/50" : "border-red-500/50"}>
                                             <CardHeader>
-                                                <CardTitle className="text-sm text-red-500">Bloqueio de Conta</CardTitle>
+                                                <CardTitle className={`text-sm ${selectedUser.is_blocked ? "text-green-500" : "text-red-500"}`}>
+                                                    {selectedUser.is_blocked ? "Desbloqueio de Conta" : "Bloqueio de Conta"}
+                                                </CardTitle>
                                             </CardHeader>
                                             <CardContent>
                                                 <p className="text-xs text-muted-foreground mb-4">
-                                                    Suspende saques, depósitos e negociações imediatamente para este usuário.
+                                                    {selectedUser.is_blocked
+                                                        ? "Restabelece todas as funções do usuário na plataforma (saques, depósitos e trade)."
+                                                        : "Suspende saques, depósitos e negociações imediatamente para este usuário."
+                                                    }
                                                 </p>
-                                                <Button variant="destructive" className="w-full" onClick={() => toast.error("Função de bloqueio em desenvolvimento.")}>
-                                                    Suspender Conta
+                                                <Button
+                                                    variant={selectedUser.is_blocked ? "default" : "destructive"}
+                                                    className={`w-full ${selectedUser.is_blocked ? "bg-green-600 hover:bg-green-700" : ""}`}
+                                                    onClick={handleToggleBlock}
+                                                    disabled={processing}
+                                                >
+                                                    {processing ? <Loader2 className="w-4 h-4 animate-spin" /> : (selectedUser.is_blocked ? "Desbloquear Conta" : "Suspender Conta")}
                                                 </Button>
                                             </CardContent>
                                         </Card>
