@@ -111,13 +111,26 @@ export default function AdminDashboard() {
             setUserTransactions(txData || []);
 
             try {
-                // 2. Busca Tokens Emitidos (Voltamos para a tabela correta com o user_id)
-                const { data: emittedData } = await supabase
+                // 2. Busca Tokens Emitidos (Ativos criados pelo Atleta)
+                // Primeiro descobrimos o athlete_id atrelado a este usuário
+                const { data: athleteProfile } = await supabase
                     .from('athlete_tokens')
-                    .select('*')
-                    .eq('user_id', userId);
+                    .select('athlete_id')
+                    .eq('user_id', userId)
+                    .single();
 
-                setUserEmittedTokens(emittedData || []);
+                if (athleteProfile?.athlete_id) {
+                    // Com o athlete_id em mãos, buscamos os ativos reais criados por ele
+                    const { data: emittedData } = await supabase
+                        .from('athlete_assets')
+                        .select('*')
+                        .eq('athlete_id', athleteProfile.athlete_id);
+
+                    setUserEmittedTokens(emittedData || []);
+                } else {
+                    // Se não tiver perfil de atleta, também não tem ativos emitidos
+                    setUserEmittedTokens([]);
+                }
 
                 // 3. Busca Portfólio
                 const { data: portfolioData } = await supabase
@@ -402,15 +415,15 @@ export default function AdminDashboard() {
                                                         {userEmittedTokens.map(token => (
                                                             <li key={token.id} className="flex items-center justify-between p-3 border rounded-lg bg-card hover:bg-muted/50 transition-colors">
                                                                 <div className="flex items-center gap-4">
-                                                                    {token.avatar_url ? (
-                                                                        <img src={token.avatar_url} alt="Capa do Ativo" className="w-12 h-12 rounded-full object-cover border-2 border-primary/20 shadow-sm" />
+                                                                    {token.photo_url ? (
+                                                                        <img src={token.photo_url} alt="Capa do Ativo" className="w-12 h-12 rounded-full object-cover border-2 border-primary/20 shadow-sm" />
                                                                     ) : (
                                                                         <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary border-2 border-primary/20">
                                                                             <Coins className="w-6 h-6" />
                                                                         </div>
                                                                     )}
                                                                     <div>
-                                                                        <p className="font-bold text-base leading-none mb-1">{token.athlete_name || "Atleta sem nome"}</p>
+                                                                        <p className="font-bold text-base leading-none mb-1">{token.title || "Ativo sem título"}</p>
                                                                         <p className="text-xs text-muted-foreground">
                                                                             Disp: <span className="font-medium text-foreground">{token.available_tokens ?? 0}</span> / {token.total_tokens ?? 0}
                                                                         </p>
