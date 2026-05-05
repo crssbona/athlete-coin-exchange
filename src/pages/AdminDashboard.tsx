@@ -38,6 +38,7 @@ export default function AdminDashboard() {
 
     // Estados da Plataforma
     const [platformBalance, setPlatformBalance] = useState(0);
+    const [totalInvested, setTotalInvested] = useState(0);
     const [processing, setProcessing] = useState(false);
 
     // Estados de Saque Admin
@@ -72,6 +73,7 @@ export default function AdminDashboard() {
         try {
             setLoading(true);
 
+            // 1. Verifica permissão de Admin
             const { data: profile } = await supabase.from('profiles').select('is_admin').eq('id', user?.id).single();
             if (!profile?.is_admin) {
                 toast.error("Acesso negado.");
@@ -79,9 +81,11 @@ export default function AdminDashboard() {
                 return;
             }
 
+            // 2. Busca configurações da plataforma (Lucro)
             const { data: settings } = await supabase.from('platform_settings').select('treasury_balance').single();
             setPlatformBalance(settings?.treasury_balance || 0);
 
+            // 3. Busca lista de usuários
             const { data, error } = await supabase.from('profiles').select(`
                 id, name, document, phone, is_blocked,
                 wallets (balance)
@@ -89,6 +93,24 @@ export default function AdminDashboard() {
 
             if (error) throw error;
             setUsersList(data || []);
+
+            // 4. Calcula o Total Investido em Ativos por todos os usuários
+            const { data: assetsData, error: assetsError } = await supabase
+                .from('user_asset_tokens')
+                .select(`
+                    quantity,
+                    athlete_assets ( price_per_token )
+                `);
+
+            if (!assetsError && assetsData) {
+                const totalInvestedCalc = assetsData.reduce((acc, curr: any) => {
+                    // O Supabase traz a relação dentro do objeto athlete_assets
+                    const price = curr.athlete_assets?.price_per_token || 0;
+                    return acc + (Number(curr.quantity) * Number(price));
+                }, 0);
+                setTotalInvested(totalInvestedCalc);
+            }
+
         } catch (error) {
             console.error(error);
             toast.error("Erro ao carregar dados do painel.");
@@ -317,10 +339,11 @@ export default function AdminDashboard() {
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {/* Card 1: Saldo nas Carteiras */}
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm font-medium">Total em Carteiras (Clientes)</CardTitle>
+                            <CardTitle className="text-sm font-medium">Total em Carteiras (Livre)</CardTitle>
                             <Users className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
@@ -330,6 +353,23 @@ export default function AdminDashboard() {
                         </CardContent>
                     </Card>
 
+                    {/* Card 2: Total Investido em Ativos (O NOVO CARD) */}
+                    <Card>
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle className="text-sm font-medium">Total Investido (Em Ativos)</CardTitle>
+                            <Coins className="h-4 w-4 text-blue-500" />
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold text-blue-500">
+                                R$ {totalInvested.toFixed(2)}
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1">
+                                Valor alocado em tokens
+                            </p>
+                        </CardContent>
+                    </Card>
+
+                    {/* Card 3: Lucro Arrecadado */}
                     <Card className="border-primary/50 bg-primary/5">
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                             <CardTitle className="text-sm font-medium">Lucro Arrecadado (Taxas)</CardTitle>
@@ -463,8 +503,16 @@ export default function AdminDashboard() {
                                             </Card>
                                             <Card>
                                                 <CardContent className="p-4 flex flex-col justify-center">
-                                                    <span className="text-xs text-muted-foreground flex items-center gap-1"><History className="h-3 w-3" /> Em Ativos</span>
-                                                    <span className="text-2xl font-bold mt-1 text-muted-foreground">R$ 0.00</span>
+                                                    <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                                        <History className="h-3 w-3" /> Em Ativos
+                                                    </span>
+                                                    {/* Removido o text-muted-foreground para destacar o valor e adicionado o cálculo dinâmico */}
+                                                    <span className="text-2xl font-bold mt-1">
+                                                        R$ {userPortfolio.reduce((acc, item) => {
+                                                            const precoAtual = item.athlete_assets?.price_per_token || 0;
+                                                            return acc + (Number(item.quantity || 0) * Number(precoAtual));
+                                                        }, 0).toFixed(2)}
+                                                    </span>
                                                 </CardContent>
                                             </Card>
                                         </div>
