@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Wallet as WalletIcon, ArrowDownCircle, ArrowUpCircle, Landmark, History, TrendingUp, Clock, Copy, CheckCircle2, Loader2 } from "lucide-react";
+import { Wallet as WalletIcon, ArrowDownCircle, ArrowUpCircle, Landmark, History, TrendingUp, Clock, Copy, CheckCircle2, Loader2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { SponsorPanel } from "@/components/profile/SponsorPanel";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -20,6 +20,7 @@ export default function WalletPage() {
 
     const [balance, setBalance] = useState<number>(0);
     const [blockedBalance, setBlockedBalance] = useState<number>(0);
+    const [pendingWithdrawalTotal, setPendingWithdrawalTotal] = useState<number>(0);
 
     const [depositAmount, setDepositAmount] = useState("");
     const [withdrawAmount, setWithdrawAmount] = useState("");
@@ -107,6 +108,21 @@ export default function WalletPage() {
             }
 
             setBlockedBalance(blocked);
+
+            // Busca e soma os saques pendentes
+            const { data: pendingWithdrawals } = await supabase
+                .from('fiat_transactions')
+                .select('amount')
+                .eq('user_id', user?.id)
+                .eq('type', 'withdraw')
+                .eq('status', 'pending');
+
+            if (pendingWithdrawals) {
+                const totalPendingW = pendingWithdrawals.reduce((acc, tx) => acc + Math.abs(tx.amount), 0);
+                setPendingWithdrawalTotal(totalPendingW);
+            } else {
+                setPendingWithdrawalTotal(0);
+            }
 
             const { data: txs } = await supabase
                 .from('fiat_transactions')
@@ -204,62 +220,31 @@ export default function WalletPage() {
             toast.error("Conta suspensa. Saques bloqueados.");
             return;
         }
+
         const amount = parseFloat(withdrawAmount);
 
-        if (!amount || amount < 5) {
-            toast.error("O valor mínimo para saque é de R$ 5,00.");
-            return;
-        }
-        if (!pixKey) {
-            toast.error("Por favor, preencha a chave PIX.");
-            return;
-        }
-        if (amount > balance) {
-            toast.error("Saldo insuficiente para este saque.");
-            return;
-        }
+        if (!amount || amount < 5) return toast.error("O valor mínimo para saque é de R$ 5,00.");
+        if (!pixKey) return toast.error("Por favor, preencha a chave PIX.");
+        if (amount > balance) return toast.error("Saldo insuficiente para este saque.");
 
         setProcessing(true);
         try {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!session) throw new Error("Sessão não encontrada.");
-
-            // Pega a URL do Supabase (certifique-se de usar a URL do seu projeto)
-            const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://mwumwryacppddvfwulok.supabase.co';
-
-            const response = await fetch(`${supabaseUrl}/functions/v1/create-withdrawal`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${session.access_token}`
-                },
-                body: JSON.stringify({
-                    amount: amount,
-                    pixKey: pixKey,
-                    pixKeyType: pixKeyType
-                })
+            // Chama a nova função RPC que congela o saldo e cria o pedido 'pending'
+            const { data, error } = await supabase.rpc('request_manual_withdrawal', {
+                p_amount: amount,
+                p_pix_key: pixKey,
+                p_pix_type: pixKeyType
             });
 
-            const data = await response.json();
+            if (error) throw error;
 
-            if (data.success) {
-                toast.success(data.message);
+            if (data === true) {
+                toast.success("Solicitação de saque enviada para aprovação da equipe!");
                 setWithdrawAmount("");
                 setPixKey("");
-                setBalance(prev => prev - amount);
-
-                // === MÁGICA VISUAL: Adiciona a transação na lista imediatamente ===
-                const novaTransacao = {
-                    id: String(Date.now()),
-                    type: 'withdrawal',
-                    amount: amount,
-                    status: 'completed',
-                    created_at: new Date().toISOString()
-                };
-                setTransactions(prev => [novaTransacao, ...prev]);
-                // ==================================================================
+                loadWalletData(); // Atualiza os números e o histórico na tela imediatamente
             } else {
-                toast.error(data.message || "Erro ao solicitar saque.");
+                toast.error("Erro ao solicitar saque. Verifique seu saldo.");
             }
         } catch (error: any) {
             console.error(error);
@@ -300,15 +285,29 @@ export default function WalletPage() {
                                             </h2>
                                         </div>
 
-                                        {blockedBalance > 0 && (
-                                            <div className="flex items-center gap-2 bg-muted/50 border rounded-lg p-3 text-sm">
-                                                <Clock className="w-4 h-4 text-amber-500" />
-                                                <div className="flex flex-col">
-                                                    <span className="text-muted-foreground text-xs font-medium">Reservado em Ordens</span>
-                                                    <span className="font-bold text-foreground">R$ {blockedBalance.toFixed(2)}</span>
+                                        {/* Container para as tags de aviso */}
+                                        <div className="flex flex-col gap-2">
+                                            {blockedBalance > 0 && (
+                                                <div className="flex items-center gap-2 bg-muted/50 border rounded-lg p-3 text-sm">
+                                                    <Clock className="w-4 h-4 text-amber-500" />
+                                                    <div className="flex flex-col">
+                                                        <span className="text-muted-foreground text-xs font-medium">Reservado em Ordens</span>
+                                                        <span className="font-bold text-foreground">R$ {blockedBalance.toFixed(2)}</span>
+                                                    </div>
                                                 </div>
-                                            </div>
-                                        )}
+                                            )}
+
+                                            {/* NOVO: Indicador de Saque Pendente */}
+                                            {pendingWithdrawalTotal > 0 && (
+                                                <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 text-sm animate-pulse">
+                                                    <Clock className="w-4 h-4 text-amber-600" />
+                                                    <div className="flex flex-col">
+                                                        <span className="text-amber-600/80 text-xs font-medium">Saque em Análise</span>
+                                                        <span className="font-bold text-amber-600">R$ {pendingWithdrawalTotal.toFixed(2)}</span>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
                                 </CardContent>
                             </Card>
@@ -476,27 +475,66 @@ export default function WalletPage() {
                                         <div className="space-y-4 max-h-[350px] overflow-y-auto pr-2 scrollbar-thin">
                                             {transactions.map((tx) => {
                                                 const isDeposit = tx.type === 'deposit';
-                                                const isManualAdjustment = !!tx.description;
+                                                const isPending = tx.status === 'pending';
+                                                const isRejected = tx.status === 'rejected';
+
+                                                const isApprovedPix = !isDeposit && tx.status === 'completed' && tx.description?.includes('PIX Asaas');
+                                                const isManualAdjustment = !!tx.description && !isApprovedPix;
+
+                                                // Definindo o ícone e a cor principal
+                                                let iconColorBg = 'bg-red-500/20 text-red-500';
+                                                let Icon = ArrowUpCircle;
+
+                                                if (isDeposit) {
+                                                    iconColorBg = 'bg-green-500/20 text-green-500';
+                                                    Icon = ArrowDownCircle;
+                                                } else if (isApprovedPix) {
+                                                    iconColorBg = 'bg-green-500/20 text-green-500';
+                                                    Icon = CheckCircle2;
+                                                } else if (isRejected) {
+                                                    iconColorBg = 'bg-red-500/20 text-red-500';
+                                                    Icon = XCircle; // Ícone de "X" para rejeitados
+                                                } else if (isPending) {
+                                                    iconColorBg = 'bg-amber-500/20 text-amber-500';
+                                                    Icon = Clock;
+                                                }
 
                                                 return (
-                                                    <div key={tx.id} className="flex items-center justify-between pb-4 border-b last:border-0 last:pb-0">
+                                                    <div key={tx.id} className={`flex items-center justify-between pb-4 border-b last:border-0 last:pb-0 ${isRejected ? 'opacity-60 grayscale' : ''}`}>
                                                         <div className="flex items-center gap-3">
-                                                            <div className={`p-2 rounded-full ${isDeposit ? 'bg-green-500/20 text-green-500' : 'bg-red-500/20 text-red-500'}`}>
-                                                                {isDeposit ? <ArrowDownCircle className="w-4 h-4" /> : <ArrowUpCircle className="w-4 h-4" />}
+                                                            <div className={`p-2 rounded-full ${iconColorBg}`}>
+                                                                <Icon className="w-4 h-4" />
                                                             </div>
-                                                            <div>
-                                                                {/* Define o título baseado na origem da transação */}
-                                                                <p className="text-sm font-medium">
-                                                                    {isManualAdjustment
-                                                                        ? (isDeposit ? 'Crédito do Opatrocinador' : 'Débito do Opatrocinador')
-                                                                        : (isDeposit ? 'Depósito PIX' : 'Saque PIX')
-                                                                    }
-                                                                </p>
+                                                            <div className="flex flex-col">
+                                                                <div className="flex items-center gap-2">
+                                                                    <p className={`text-sm font-medium ${isApprovedPix ? 'text-green-500' : isRejected ? 'text-red-500' : ''}`}>
+                                                                        {isApprovedPix ? 'Saque Aprovado'
+                                                                            : isRejected ? 'Saque Rejeitado'
+                                                                                : isManualAdjustment
+                                                                                    ? (isDeposit ? 'Crédito do Opatrocinador' : 'Débito do Opatrocinador')
+                                                                                    : (isDeposit ? 'Depósito PIX' : 'Saque PIX')
+                                                                        }
+                                                                    </p>
 
-                                                                {/* Exibe o motivo caso seja ajuste da equipe */}
+                                                                    {/* Mantém a tag apenas para pendentes, pois o título já deixa claro os outros status */}
+                                                                    {isPending && <span className="inline-flex items-center rounded-md border border-amber-500/50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-500">Em Análise</span>}
+                                                                </div>
+
                                                                 {isManualAdjustment && (
                                                                     <p className="text-[11px] font-semibold text-muted-foreground mt-0.5 max-w-[150px] truncate" title={tx.description}>
                                                                         Motivo: {tx.description}
+                                                                    </p>
+                                                                )}
+
+                                                                {isApprovedPix && (
+                                                                    <p className="text-[11px] font-semibold text-green-600/70 mt-0.5 max-w-[150px] truncate">
+                                                                        Transferido com sucesso
+                                                                    </p>
+                                                                )}
+
+                                                                {isRejected && (
+                                                                    <p className="text-[11px] font-semibold text-red-600/70 mt-0.5 max-w-[150px] truncate">
+                                                                        Saldo devolvido à carteira
                                                                     </p>
                                                                 )}
 
@@ -505,7 +543,8 @@ export default function WalletPage() {
                                                                 </p>
                                                             </div>
                                                         </div>
-                                                        <p className={`font-semibold ${isDeposit ? 'text-green-500' : 'text-foreground'}`}>
+                                                        {/* Se for rejeitado, aplica um risco no valor (line-through) e deixa cinza */}
+                                                        <p className={`font-semibold ${isRejected ? 'text-muted-foreground line-through' : (isDeposit || isApprovedPix ? 'text-green-500' : (isPending ? 'text-amber-500' : 'text-foreground'))}`}>
                                                             {isDeposit ? '+' : '-'} R$ {Math.abs(tx.amount).toFixed(2)}
                                                         </p>
                                                     </div>

@@ -25,12 +25,13 @@ import {
 } from "@/components/ui/tooltip";
 import {
     Users, Search, DollarSign, ShieldCheck, ArrowLeft, Landmark,
-    Loader2, Copy, History, Wallet, AlertTriangle, ArrowDownRight, ArrowUpRight, Coins, Image as ImageIcon
+    Loader2, Copy, History, Wallet, AlertTriangle, ArrowDownRight, ArrowUpRight, Coins, Image as ImageIcon, Clock
 } from "lucide-react";
 import { toast } from "sonner";
 
 export default function AdminDashboard() {
     const { user, loading: authLoading } = useAuth();
+    const [pendingWithdrawals, setPendingWithdrawals] = useState<any[]>([]);
     const navigate = useNavigate();
     const [loading, setLoading] = useState(true);
     const [usersList, setUsersList] = useState<any[]>([]);
@@ -46,6 +47,10 @@ export default function AdminDashboard() {
     const [pixKey, setPixKey] = useState("");
     const [pixKeyType, setPixKeyType] = useState("CPF");
     const [isWithdrawOpen, setIsWithdrawOpen] = useState(false);
+
+    // Estados dos Modais de Saque
+    const [approveDialogTx, setApproveDialogTx] = useState<any>(null);
+    const [rejectDialogTxId, setRejectDialogTxId] = useState<string | null>(null);
 
     // Estados da Ficha do Usuário (CRM)
     const [selectedUser, setSelectedUser] = useState<any>(null);
@@ -110,6 +115,20 @@ export default function AdminDashboard() {
                 }, 0);
                 setTotalInvested(totalInvestedCalc);
             }
+
+            // Busca solicitações de saque pendentes e junta com os dados do usuário
+            const { data: withdrawalsData } = await supabase
+                .from('fiat_transactions')
+                .select(`
+                    id, amount, created_at, pix_key, pix_type, status,
+                    user_id,
+                    profiles ( name, document, phone )
+                `)
+                .eq('type', 'withdraw')
+                .eq('status', 'pending')
+                .order('created_at', { ascending: false });
+
+            setPendingWithdrawals(withdrawalsData || []);
 
         } catch (error) {
             console.error(error);
@@ -310,6 +329,54 @@ export default function AdminDashboard() {
         u.id?.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
+    const handleRejectWithdrawal = async () => {
+        if (!rejectDialogTxId) return;
+
+        setProcessing(true);
+        try {
+            const { error } = await supabase.rpc('reject_withdrawal', { p_tx_id: rejectDialogTxId });
+            if (error) throw error;
+
+            toast.success("Saque rejeitado. O saldo foi devolvido ao usuário.");
+            setRejectDialogTxId(null); // Fecha o modal
+            loadAdminData(); // Recarrega a tela
+        } catch (error) {
+            console.error(error);
+            toast.error("Erro ao rejeitar saque.");
+        } finally {
+            setProcessing(false);
+        }
+    };
+
+    const handleApproveWithdrawal = async () => {
+        if (!approveDialogTx) return;
+
+        setProcessing(true);
+        try {
+            const { data, error } = await supabase.functions.invoke('process-admin-withdrawal', {
+                body: {
+                    txId: approveDialogTx.id,
+                    amount: Math.abs(approveDialogTx.amount),
+                    pixKey: approveDialogTx.pix_key,
+                    pixKeyType: approveDialogTx.pix_type
+                }
+            });
+
+            if (error) throw new Error("Falha na comunicação com o servidor de pagamentos.");
+            if (!data?.success) throw new Error(data?.message || "Erro desconhecido na API do Asaas.");
+
+            toast.success("Saque aprovado e transferido via PIX com sucesso!");
+            setApproveDialogTx(null); // Fecha o modal
+            loadAdminData();
+
+        } catch (error: any) {
+            console.error("Erro na aprovação:", error);
+            toast.error(error.message || "Erro ao processar a aprovação do saque.");
+        } finally {
+            setProcessing(false);
+        }
+    };
+
     if (loading) return <div className="flex h-screen items-center justify-center">A carregar painel...</div>;
 
     return (
@@ -386,61 +453,133 @@ export default function AdminDashboard() {
                     </Card>
                 </div>
 
-                <Card>
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                            <Users className="h-5 w-5" /> Usuários Ativos
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <Table>
-                            <TableHeader>
-                                <TableRow>
-                                    <TableHead className="w-[100px]">ID</TableHead>
-                                    <TableHead>Nome</TableHead>
-                                    <TableHead>CPF</TableHead>
-                                    <TableHead>Telefone</TableHead>
-                                    <TableHead>Saldo Livre</TableHead>
-                                    <TableHead className="text-right">Ações</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {filteredUsers.map((u) => (
-                                    <TableRow key={u.id}>
-                                        <TableCell>
-                                            <TooltipProvider>
-                                                <Tooltip>
-                                                    <TooltipTrigger asChild>
-                                                        <span className="font-mono text-xs bg-muted/50 text-muted-foreground hover:bg-muted/80 transition-colors px-2 py-1 rounded cursor-help">
-                                                            {u.id?.substring(0, 8)}...
-                                                        </span>
-                                                    </TooltipTrigger>
-                                                    <TooltipContent side="top">
-                                                        <p className="font-mono text-sm">{u.id}</p>
-                                                    </TooltipContent>
-                                                </Tooltip>
-                                            </TooltipProvider>
-                                        </TableCell>
-                                        <TableCell className="font-medium">
-                                            {u.name || "Sem nome"}
-                                            {u.is_blocked && (
-                                                <Badge variant="destructive" className="ml-2 text-[10px] h-5">Bloqueado</Badge>
-                                            )}
-                                        </TableCell>
-                                        <TableCell>{u.document || "---"}</TableCell>
-                                        <TableCell>{u.phone || "---"}</TableCell>
-                                        <TableCell>R$ {(u.wallets?.balance ?? u.wallets?.[0]?.balance ?? 0).toFixed(2)}</TableCell>
-                                        <TableCell className="text-right">
-                                            <Button variant="outline" size="sm" onClick={() => openUserProfile(u)}>
-                                                Ver Ficha
-                                            </Button>
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    </CardContent>
-                </Card>
+                {/* LAYOUT DE ABAS NO DASHBOARD PRINCIPAL */}
+                <Tabs defaultValue="users" className="w-full">
+                    <TabsList className="grid w-full md:w-[600px] grid-cols-2 mb-6">
+                        <TabsTrigger value="users">
+                            Usuários Ativos
+                        </TabsTrigger>
+                        <TabsTrigger value="withdrawals" className="relative">
+                            Solicitações de Saque
+                            {pendingWithdrawals.length > 0 && (
+                                <Badge variant="destructive" className="ml-2 h-5 text-[10px]">{pendingWithdrawals.length}</Badge>
+                            )}
+                        </TabsTrigger>
+                    </TabsList>
+
+                    <TabsContent value="users">
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2">
+                                    <Users className="h-5 w-5" /> Usuários Ativos
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead className="w-[100px]">ID</TableHead>
+                                            <TableHead>Nome</TableHead>
+                                            <TableHead>CPF</TableHead>
+                                            <TableHead>Telefone</TableHead>
+                                            <TableHead>Saldo Livre</TableHead>
+                                            <TableHead className="text-right">Ações</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {filteredUsers.map((u) => (
+                                            <TableRow key={u.id}>
+                                                <TableCell>
+                                                    <TooltipProvider>
+                                                        <Tooltip>
+                                                            <TooltipTrigger asChild>
+                                                                <span className="font-mono text-xs bg-muted/50 text-muted-foreground hover:bg-muted/80 transition-colors px-2 py-1 rounded cursor-help">
+                                                                    {u.id?.substring(0, 8)}...
+                                                                </span>
+                                                            </TooltipTrigger>
+                                                            <TooltipContent side="top">
+                                                                <p className="font-mono text-sm">{u.id}</p>
+                                                            </TooltipContent>
+                                                        </Tooltip>
+                                                    </TooltipProvider>
+                                                </TableCell>
+                                                <TableCell className="font-medium">
+                                                    {u.name || "Sem nome"}
+                                                    {u.is_blocked && (
+                                                        <Badge variant="destructive" className="ml-2 text-[10px] h-5 px-1.5">Bloqueado</Badge>
+                                                    )}
+                                                </TableCell>
+                                                <TableCell>{u.document || "---"}</TableCell>
+                                                <TableCell>{u.phone || "---"}</TableCell>
+                                                <TableCell>R$ {(u.wallets?.balance ?? u.wallets?.[0]?.balance ?? 0).toFixed(2)}</TableCell>
+                                                <TableCell className="text-right">
+                                                    <Button variant="outline" size="sm" onClick={() => openUserProfile(u)}>
+                                                        Ver Ficha
+                                                    </Button>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
+
+                    <TabsContent value="withdrawals">
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="text-xl text-amber-500 flex items-center gap-2">
+                                    <Clock className="w-5 h-5" /> Saques Aguardando Aprovação
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                {pendingWithdrawals.length === 0 ? (
+                                    <div className="text-center py-12 text-muted-foreground">Nenhuma solicitação de saque pendente.</div>
+                                ) : (
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow>
+                                                <TableHead>Usuário</TableHead>
+                                                <TableHead>Chave PIX</TableHead>
+                                                <TableHead>Data</TableHead>
+                                                <TableHead className="text-right">Valor</TableHead>
+                                                <TableHead className="text-center">Ações</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {pendingWithdrawals.map((tx) => (
+                                                <TableRow key={tx.id}>
+                                                    <TableCell>
+                                                        <p className="font-medium">{tx.profiles?.name || 'Desconhecido'}</p>
+                                                        <p className="text-xs text-muted-foreground">Doc: {tx.profiles?.document}</p>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <p className="font-mono text-sm">{tx.pix_key}</p>
+                                                        <Badge variant="secondary" className="text-[10px] mt-1">{tx.pix_type}</Badge>
+                                                    </TableCell>
+                                                    <TableCell className="text-sm text-muted-foreground">{formatDate(tx.created_at)}</TableCell>
+                                                    <TableCell className="text-right font-bold text-red-500">
+                                                        R$ {Math.abs(tx.amount).toFixed(2)}
+                                                    </TableCell>
+                                                    <TableCell className="text-center">
+                                                        <div className="flex justify-center gap-2">
+                                                            <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white" disabled={processing} onClick={() => setApproveDialogTx(tx)}>
+                                                                Aprovar
+                                                            </Button>
+                                                            <Button size="sm" variant="destructive" disabled={processing} onClick={() => setRejectDialogTxId(tx.id)}>
+                                                                Rejeitar
+                                                            </Button>
+                                                        </div>
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
+                </Tabs>
 
                 <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
                     <SheetContent className="sm:max-w-[600px] overflow-y-auto">
@@ -738,7 +877,56 @@ export default function AdminDashboard() {
                     </SheetContent>
                 </Sheet>
 
-            </div>
-        </div>
+                {/* MODAL DE APROVAÇÃO DE SAQUE */}
+                <Dialog open={!!approveDialogTx} onOpenChange={(open) => !open && setApproveDialogTx(null)}>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Aprovar Transferência PIX</DialogTitle>
+                            <DialogDescription className="pt-4 text-base">
+                                Você está prestes a transferir <strong className="text-foreground">R$ {approveDialogTx ? Math.abs(approveDialogTx.amount).toFixed(2) : '0.00'}</strong> para a conta de <strong className="text-foreground">{approveDialogTx?.profiles?.name}</strong>.
+                            </DialogDescription>
+                        </DialogHeader>
+
+                        <div className="bg-muted/50 p-4 rounded-lg my-2 border">
+                            <p className="text-xs text-muted-foreground mb-1">Chave de Destino ({approveDialogTx?.pix_type})</p>
+                            <p className="font-mono text-sm font-semibold">{approveDialogTx?.pix_key}</p>
+                        </div>
+
+                        <DialogFooter className="gap-2 sm:gap-0 mt-2">
+                            <Button variant="outline" onClick={() => setApproveDialogTx(null)} disabled={processing}>
+                                Cancelar
+                            </Button>
+                            <Button className="bg-green-600 hover:bg-green-700 text-white" onClick={handleApproveWithdrawal} disabled={processing}>
+                                {processing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                                Confirmar e Transferir
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
+                {/* MODAL DE REJEIÇÃO DE SAQUE */}
+                <Dialog open={!!rejectDialogTxId} onOpenChange={(open) => !open && setRejectDialogTxId(null)}>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle className="text-red-500 flex items-center gap-2">
+                                <AlertTriangle className="w-5 h-5" /> Rejeitar Solicitação
+                            </DialogTitle>
+                            <DialogDescription className="pt-2">
+                                Tem certeza que deseja rejeitar esta solicitação de saque? O valor descontado será integralmente devolvido para a carteira do usuário na plataforma.
+                            </DialogDescription>
+                        </DialogHeader>
+                        <DialogFooter className="gap-2 sm:gap-0 mt-4">
+                            <Button variant="outline" onClick={() => setRejectDialogTxId(null)} disabled={processing}>
+                                Cancelar
+                            </Button>
+                            <Button variant="destructive" onClick={handleRejectWithdrawal} disabled={processing}>
+                                {processing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                                Sim, Rejeitar Saque
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+            </div >
+        </div >
     );
 }
