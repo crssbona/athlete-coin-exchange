@@ -10,22 +10,11 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import {
-    Heart,
-    Trophy,
-    Medal,
-    Twitter,
-    Instagram,
-    Twitch,
-    Youtube,
-    ImageIcon,
-    Coins,
-    ArrowLeft,
-    TrendingUp,
-    TrendingDown,
-    X,              // <-- Novo Ícone
-    ChevronLeft,    // <-- Novo Ícone
-    ChevronRight    // <-- Novo Ícone
+    Heart, Trophy, Medal, Twitter, Instagram, Twitch, Youtube,
+    ImageIcon, Coins, ArrowLeft, TrendingUp, TrendingDown, X,
+    ChevronLeft, ChevronRight
 } from "lucide-react";
+import { CosmicAvatar } from "@/components/CosmicAvatar";
 
 interface Asset {
     id: string;
@@ -54,12 +43,12 @@ const AthleteProfileVitrine = () => {
     const [watchlist, setWatchlist] = useState<Set<string>>(new Set());
     const [loading, setLoading] = useState(true);
 
-    // 👇 NOVOS ESTADOS PARA A GALERIA DE IMAGENS 👇
     const [selectedImageIndex, setSelectedImageIndex] = useState<number | null>(null);
 
     useEffect(() => {
         const fetchAthleteAndAssets = async () => {
             try {
+                // Busca os dados do atleta na tabela de tokens
                 const { data: athleteData, error: athleteError } = await supabase
                     .from('athlete_tokens')
                     .select('*')
@@ -69,9 +58,22 @@ const AthleteProfileVitrine = () => {
                 if (athleteError) throw athleteError;
 
                 if (athleteData) {
-                    // 🔥 Correção do Vídeo aplicada aqui: Adicionado featuredVideo
+
+                    // 👇 BUSCA SEPARADA DE VERIFICAÇÃO 👇
+                    let isVerifiedStatus = false;
+                    if (athleteData.user_id) {
+                        const { data: profileData } = await supabase
+                            .from('vw_public_profiles')
+                            .select('is_verified')
+                            .eq('id', athleteData.user_id)
+                            .maybeSingle();
+
+                        isVerifiedStatus = profileData?.is_verified || false;
+                    }
+
                     const supabaseAthlete: Athlete & { featuredVideo?: string } = {
                         id: athleteData.athlete_id,
+                        isVerified: isVerifiedStatus, // <-- Atribui aqui
                         name: athleteData.athlete_name,
                         sport: athleteData.sport,
                         avatar: athleteData.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${athleteData.athlete_name}`,
@@ -84,7 +86,7 @@ const AthleteProfileVitrine = () => {
                         description: athleteData.description || '',
                         achievements: athleteData.achievements || [],
                         galleryUrls: athleteData.gallery_urls || [],
-                        featuredVideo: athleteData.featured_video || "", // <--- VÍDEO PUXADO DO BANCO
+                        featuredVideo: athleteData.featured_video || "",
                         socialMedia: {
                             twitter: athleteData.social_twitter,
                             instagram: athleteData.social_instagram,
@@ -94,6 +96,7 @@ const AthleteProfileVitrine = () => {
                     };
                     setAthlete(supabaseAthlete);
 
+                    // Busca os ativos do atleta
                     const { data: assetsData, error: assetsError } = await supabase
                         .from('athlete_assets')
                         .select('*')
@@ -164,12 +167,11 @@ const AthleteProfileVitrine = () => {
         }
     };
 
-    // 👇 NOVAS FUNÇÕES DA GALERIA 👇
     const openLightbox = (index: number) => setSelectedImageIndex(index);
     const closeLightbox = () => setSelectedImageIndex(null);
 
     const nextImage = (e: React.MouseEvent) => {
-        e.stopPropagation(); // Evita que o clique feche a janela
+        e.stopPropagation();
         if (athlete?.galleryUrls && selectedImageIndex !== null) {
             setSelectedImageIndex((selectedImageIndex + 1) % athlete.galleryUrls.length);
         }
@@ -182,7 +184,6 @@ const AthleteProfileVitrine = () => {
         }
     };
 
-    // Suporte para teclas do teclado na galeria (Esc e Setas)
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if (selectedImageIndex === null) return;
@@ -193,7 +194,6 @@ const AthleteProfileVitrine = () => {
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [selectedImageIndex, athlete]);
-
 
     if (loading) return <div className="min-h-screen bg-background flex items-center justify-center"><p className="animate-pulse">A carregar...</p></div>;
     if (!athlete) return <div className="min-h-screen bg-background flex items-center justify-center"><h1 className="text-3xl font-bold">Atleta não encontrado</h1></div>;
@@ -209,13 +209,13 @@ const AthleteProfileVitrine = () => {
                         Voltar para a Vitrine
                     </Link>
 
-                    {/* Cabeçalho Melhorado */}
                     <div className="flex flex-col md:flex-row gap-6 md:gap-8 items-center md:items-start text-center md:text-left mb-12">
-                        <img
+                        <CosmicAvatar
                             src={athlete.avatar}
-                            alt={athlete.name}
-                            className="w-40 h-40 md:w-48 md:h-48 rounded-full object-cover shadow-lg border-4 border-card shrink-0"
+                            verified={athlete.isVerified}
+                            className="w-40 h-40 md:w-48 md:h-48 shrink-0 shadow-lg"
                         />
+
                         <div className="flex-1 space-y-4 flex flex-col items-center md:items-start w-full">
                             <div className="flex flex-col items-center md:items-start">
                                 <Badge variant="secondary" className="mb-3">
@@ -252,7 +252,6 @@ const AthleteProfileVitrine = () => {
                             </Card>
                         </div>
 
-                        {/* 👇 ÁREA DA GALERIA ATUALIZADA 👇 */}
                         <div className="md:col-span-2 space-y-6">
                             <Card className="h-full">
                                 <CardHeader><CardTitle className="flex items-center text-xl"><ImageIcon className="w-5 h-5 mr-2 text-primary" />Galeria de Fotos</CardTitle></CardHeader>
@@ -266,7 +265,6 @@ const AthleteProfileVitrine = () => {
                                                     onClick={() => openLightbox(index)}
                                                 >
                                                     <img src={url} alt={`Galeria ${index + 1}`} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-                                                    {/* Efeito Hover na Foto */}
                                                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
                                                         <span className="opacity-0 group-hover:opacity-100 bg-background/80 text-foreground px-3 py-1.5 rounded-full text-xs font-medium backdrop-blur-sm transform scale-50 group-hover:scale-100 transition-all duration-300">
                                                             Ampliar
@@ -281,7 +279,6 @@ const AthleteProfileVitrine = () => {
                         </div>
                     </div>
 
-                    {/* 🔥 VÍDEO DE DESTAQUE COM A CORREÇÃO 🔥 */}
                     {(athlete as any).featuredVideo && getYouTubeEmbedUrl((athlete as any).featuredVideo) && (
                         <div className="mb-12">
                             <h2 className="text-2xl font-bold mb-6 flex items-center">
@@ -305,7 +302,6 @@ const AthleteProfileVitrine = () => {
                         </div>
                     )}
 
-                    {/* ATIVOS DISPONÍVEIS */}
                     <div className="mt-12">
                         <h2 className="text-2xl font-bold mb-6 flex items-center">
                             <Coins className="w-6 h-6 mr-2 text-primary" />
@@ -395,82 +391,29 @@ const AthleteProfileVitrine = () => {
                             </div>
                         )}
                     </div>
-
                 </div>
             </main>
 
-            {/* 👇 LIGHTBOX (Galeria em ecrã inteiro) - ATUALIZADO 👇 */}
             {selectedImageIndex !== null && athlete?.galleryUrls && (
-                <div
-                    className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 backdrop-blur-md animate-in fade-in duration-200"
-                    onClick={closeLightbox}
-                >
-                    {/* Botão Fechar - Mantido no topo direito */}
-                    <button
-                        className="absolute top-4 right-4 md:top-6 md:right-6 p-2 text-white/80 hover:text-white transition-colors bg-white/10 hover:bg-white/20 rounded-full z-[110]"
-                        onClick={closeLightbox}
-                    >
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 backdrop-blur-md animate-in fade-in duration-200" onClick={closeLightbox}>
+                    <button className="absolute top-4 right-4 md:top-6 md:right-6 p-2 text-white/80 hover:text-white transition-colors bg-white/10 hover:bg-white/20 rounded-full z-[110]" onClick={closeLightbox}>
                         <X className="w-6 h-6 md:w-8 md:h-8" />
                     </button>
-
-                    {/* --- CONTROLES DESKTOP (Escondidos no mobile: md:flex) --- */}
-                    <button
-                        className="hidden md:flex absolute md:left-8 top-1/2 -translate-y-1/2 p-3 text-white/80 hover:text-white transition-colors bg-white/10 hover:bg-white/20 rounded-full z-[110]"
-                        onClick={prevImage}
-                    >
+                    <button className="hidden md:flex absolute md:left-8 top-1/2 -translate-y-1/2 p-3 text-white/80 hover:text-white transition-colors bg-white/10 hover:bg-white/20 rounded-full z-[110]" onClick={prevImage}>
                         <ChevronLeft className="w-8 h-8" />
                     </button>
-
-                    <button
-                        className="hidden md:flex absolute md:right-8 top-1/2 -translate-y-1/2 p-3 text-white/80 hover:text-white transition-colors bg-white/10 hover:bg-white/20 rounded-full z-[110]"
-                        onClick={nextImage}
-                    >
+                    <button className="hidden md:flex absolute md:right-8 top-1/2 -translate-y-1/2 p-3 text-white/80 hover:text-white transition-colors bg-white/10 hover:bg-white/20 rounded-full z-[110]" onClick={nextImage}>
                         <ChevronRight className="w-8 h-8" />
                     </button>
-
-                    {/* Indicador Numérico DESKTOP (Escondido no mobile: md:block) */}
                     <div className="hidden md:block absolute md:bottom-8 md:left-1/2 -translate-x-1/2 text-white/90 bg-white/10 px-4 py-1.5 rounded-full text-sm font-medium backdrop-blur-sm border border-white/20 z-[110]">
                         {selectedImageIndex + 1} / {athlete.galleryUrls.length}
                     </div>
-
-
-                    {/* Imagem Ampliada */}
-                    <img
-                        src={athlete.galleryUrls[selectedImageIndex]}
-                        alt="Galeria ampliada"
-                        className="max-w-[95vw] max-h-[75vh] md:max-w-[85vw] md:max-h-[90vh] object-contain rounded-md shadow-2xl z-[105]"
-                        onClick={(e) => e.stopPropagation()} // Impede que o clique na foto feche o modal
-                    />
-
-
-                    {/* --- 👇 NOVOS CONTROLES MOBILE (Escondidos no Desktop: flex md:hidden) 👇 --- */}
-                    {/* Barra de controlo centralizada no fundo */}
-                    <div
-                        className="flex md:hidden absolute bottom-6 left-1/2 -translate-x-1/2 items-center gap-3 bg-black/60 px-2 py-1 rounded-full border border-white/10 text-white shadow-lg backdrop-blur-sm z-[110]"
-                        onClick={(e) => e.stopPropagation()} // Impede fechar ao clicar na barra
-                    >
-                        {/* Seta Esquerda Mobile */}
-                        <button
-                            onClick={prevImage}
-                            className="p-2.5 active:bg-white/20 rounded-full transition-colors"
-                        >
-                            <ChevronLeft className="w-6 h-6" />
-                        </button>
-
-                        {/* Indicador Numérico Mobile (no meio das setas) */}
-                        <span className="text-sm font-semibold px-2 min-w-[50px] text-center tabular-nums">
-                            {selectedImageIndex + 1} / {athlete.galleryUrls.length}
-                        </span>
-
-                        {/* Seta Direita Mobile */}
-                        <button
-                            onClick={nextImage}
-                            className="p-2.5 active:bg-white/20 rounded-full transition-colors"
-                        >
-                            <ChevronRight className="w-6 h-6" />
-                        </button>
+                    <img src={athlete.galleryUrls[selectedImageIndex]} alt="Galeria ampliada" className="max-w-[95vw] max-h-[75vh] md:max-w-[85vw] md:max-h-[90vh] object-contain rounded-md shadow-2xl z-[105]" onClick={(e) => e.stopPropagation()} />
+                    <div className="flex md:hidden absolute bottom-6 left-1/2 -translate-x-1/2 items-center gap-3 bg-black/60 px-2 py-1 rounded-full border border-white/10 text-white shadow-lg backdrop-blur-sm z-[110]" onClick={(e) => e.stopPropagation()}>
+                        <button onClick={prevImage} className="p-2.5 active:bg-white/20 rounded-full transition-colors"><ChevronLeft className="w-6 h-6" /></button>
+                        <span className="text-sm font-semibold px-2 min-w-[50px] text-center tabular-nums">{selectedImageIndex + 1} / {athlete.galleryUrls.length}</span>
+                        <button onClick={nextImage} className="p-2.5 active:bg-white/20 rounded-full transition-colors"><ChevronRight className="w-6 h-6" /></button>
                     </div>
-
                 </div>
             )}
         </div>

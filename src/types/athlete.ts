@@ -1,5 +1,6 @@
 export interface Athlete {
   id: string;
+  isVerified?: boolean; // <-- NOVO CAMPO ADICIONADO AQUI
   name: string;
   sport: string;
   avatar: string;

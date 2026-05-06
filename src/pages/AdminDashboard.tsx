@@ -37,22 +37,18 @@ export default function AdminDashboard() {
     const [usersList, setUsersList] = useState<any[]>([]);
     const [searchTerm, setSearchTerm] = useState("");
 
-    // Estados da Plataforma
     const [platformBalance, setPlatformBalance] = useState(0);
     const [totalInvested, setTotalInvested] = useState(0);
     const [processing, setProcessing] = useState(false);
 
-    // Estados de Saque Admin
     const [withdrawAmount, setWithdrawAmount] = useState("");
     const [pixKey, setPixKey] = useState("");
     const [pixKeyType, setPixKeyType] = useState("CPF");
     const [isWithdrawOpen, setIsWithdrawOpen] = useState(false);
 
-    // Estados dos Modais de Saque
     const [approveDialogTx, setApproveDialogTx] = useState<any>(null);
     const [rejectDialogTxId, setRejectDialogTxId] = useState<string | null>(null);
 
-    // Estados da Ficha do Usuário (CRM)
     const [selectedUser, setSelectedUser] = useState<any>(null);
     const [isSheetOpen, setIsSheetOpen] = useState(false);
     const [userDetailsLoading, setUserDetailsLoading] = useState(false);
@@ -60,7 +56,6 @@ export default function AdminDashboard() {
     const [userEmittedTokens, setUserEmittedTokens] = useState<any[]>([]);
     const [userPortfolio, setUserPortfolio] = useState<any[]>([]);
 
-    // Estado para ajuste manual
     const [adjustAmount, setAdjustAmount] = useState("");
     const [adjustType, setAdjustType] = useState("credit");
     const [adjustReason, setAdjustReason] = useState("");
@@ -78,7 +73,6 @@ export default function AdminDashboard() {
         try {
             setLoading(true);
 
-            // 1. Verifica permissão de Admin
             const { data: profile } = await supabase.from('profiles').select('is_admin').eq('id', user?.id).single();
             if (!profile?.is_admin) {
                 toast.error("Acesso negado.");
@@ -86,20 +80,18 @@ export default function AdminDashboard() {
                 return;
             }
 
-            // 2. Busca configurações da plataforma (Lucro)
             const { data: settings } = await supabase.from('platform_settings').select('treasury_balance').single();
             setPlatformBalance(settings?.treasury_balance || 0);
 
-            // 3. Busca lista de usuários
+            // 👇 ADICIONADO: is_verified no select
             const { data, error } = await supabase.from('profiles').select(`
-                id, name, document, phone, is_blocked,
+                id, name, document, phone, is_blocked, is_verified,
                 wallets (balance)
             `);
 
             if (error) throw error;
             setUsersList(data || []);
 
-            // 4. Calcula o Total Investido em Ativos por todos os usuários
             const { data: assetsData, error: assetsError } = await supabase
                 .from('user_asset_tokens')
                 .select(`
@@ -109,14 +101,12 @@ export default function AdminDashboard() {
 
             if (!assetsError && assetsData) {
                 const totalInvestedCalc = assetsData.reduce((acc, curr: any) => {
-                    // O Supabase traz a relação dentro do objeto athlete_assets
                     const price = curr.athlete_assets?.price_per_token || 0;
                     return acc + (Number(curr.quantity) * Number(price));
                 }, 0);
                 setTotalInvested(totalInvestedCalc);
             }
 
-            // Busca solicitações de saque pendentes e junta com os dados do usuário
             const { data: withdrawalsData } = await supabase
                 .from('fiat_transactions')
                 .select(`
@@ -141,7 +131,6 @@ export default function AdminDashboard() {
     const fetchUserDetails = async (userId: string) => {
         setUserDetailsLoading(true);
         try {
-            // 1. Busca Transações 
             const { data: txData } = await supabase
                 .from('fiat_transactions')
                 .select('*')
@@ -152,8 +141,6 @@ export default function AdminDashboard() {
             setUserTransactions(txData || []);
 
             try {
-                // 2. Busca Tokens Emitidos (Ativos criados pelo Atleta)
-                // Primeiro descobrimos o athlete_id atrelado a este usuário
                 const { data: athleteProfile } = await supabase
                     .from('athlete_tokens')
                     .select('athlete_id')
@@ -161,7 +148,6 @@ export default function AdminDashboard() {
                     .single();
 
                 if (athleteProfile?.athlete_id) {
-                    // Com o athlete_id em mãos, buscamos os ativos reais criados por ele
                     const { data: emittedData } = await supabase
                         .from('athlete_assets')
                         .select('*')
@@ -169,11 +155,9 @@ export default function AdminDashboard() {
 
                     setUserEmittedTokens(emittedData || []);
                 } else {
-                    // Se não tiver perfil de atleta, também não tem ativos emitidos
                     setUserEmittedTokens([]);
                 }
 
-                // 3. Busca Portfólio
                 const { data: portfolioData } = await supabase
                     .from('user_asset_tokens')
                     .select(`
@@ -213,30 +197,26 @@ export default function AdminDashboard() {
 
         setProcessing(true);
         try {
-            // 1. Pegar o saldo atual da carteira de forma segura
             const { data: walletData, error: walletError } = await supabase
                 .from('wallets')
                 .select('balance')
                 .eq('user_id', selectedUser.id)
-                .maybeSingle(); // maybeSingle() não quebra o código se a carteira não existir
+                .maybeSingle();
 
             if (walletError) throw walletError;
 
-            // Se o usuário não tiver carteira, o saldo atual é 0
             const currentBalance = walletData ? Number(walletData.balance) : 0;
             const newBalance = isCredit ? currentBalance + amount : currentBalance - amount;
 
-            // 2. Criar ou Atualizar o saldo na carteira (upsert)
             const { error: updateError } = await supabase
                 .from('wallets')
                 .upsert({
                     user_id: selectedUser.id,
                     balance: newBalance
-                }, { onConflict: 'user_id' }); // Se o user_id já existir, ele atualiza o balance. Se não, ele cria.
+                }, { onConflict: 'user_id' });
 
             if (updateError) throw updateError;
 
-            // 3. Registrar o histórico na tabela fiat_transactions
             const { error: txError } = await supabase
                 .from('fiat_transactions')
                 .insert({
@@ -253,11 +233,9 @@ export default function AdminDashboard() {
             setAdjustAmount("");
             setAdjustReason("");
 
-            // Atualiza os dados
             loadAdminData();
             fetchUserDetails(selectedUser.id);
 
-            // Atualiza o estado local para refletir na tela imediatamente
             setSelectedUser({
                 ...selectedUser,
                 wallets: { balance: newBalance }
@@ -272,40 +250,58 @@ export default function AdminDashboard() {
     };
 
     const handleToggleBlock = async () => {
-        // Pega o status inverso do atual de forma segura (forçando para booleano)
         const newStatus = !!!selectedUser.is_blocked;
 
         setProcessing(true);
         try {
-            console.log(`Tentando mudar o status is_blocked do usuário ${selectedUser.id} para:`, newStatus);
-
             const { data, error } = await supabase
                 .from('profiles')
                 .update({ is_blocked: newStatus })
                 .eq('id', selectedUser.id)
-                .select(); // Adicionamos o .select() para forçar o Supabase a retornar a linha alterada
+                .select();
 
             if (error) {
-                console.error("Erro do Supabase ao bloquear:", error);
                 throw error;
             }
 
-            // Validação de segurança extra: se retornou vazio, a atualização foi bloqueada pelo RLS
             if (!data || data.length === 0) {
                 throw new Error("A atualização foi rejeitada pelas políticas de segurança do banco (RLS).");
             }
 
             toast.success(newStatus ? "Conta bloqueada com sucesso." : "Conta desbloqueada com sucesso.");
 
-            // Atualiza a ficha atual para refletir o novo status REAL que veio do banco
             setSelectedUser({ ...selectedUser, is_blocked: newStatus });
-
-            // Recarrega a lista de usuários para atualizar a tabela principal
             loadAdminData();
 
         } catch (error: any) {
             console.error("Catch error handleToggleBlock:", error);
             toast.error(error.message || "Erro ao alterar o status da conta. Verifique o console.");
+        } finally {
+            setProcessing(false);
+        }
+    };
+
+    // 👇 NOVA FUNÇÃO: Toggle para verificação manual do perfil
+    const handleToggleVerify = async () => {
+        const newStatus = !!!selectedUser.is_verified;
+
+        setProcessing(true);
+        try {
+            const { error } = await supabase
+                .from('profiles')
+                .update({ is_verified: newStatus })
+                .eq('id', selectedUser.id);
+
+            if (error) throw error;
+
+            toast.success(newStatus ? "Perfil verificado com sucesso!" : "Selo de verificação removido.");
+
+            setSelectedUser({ ...selectedUser, is_verified: newStatus });
+            loadAdminData(); // Atualiza a tabela no fundo
+
+        } catch (error: any) {
+            console.error("Erro ao verificar:", error);
+            toast.error("Erro ao alterar verificação do perfil.");
         } finally {
             setProcessing(false);
         }
@@ -338,8 +334,8 @@ export default function AdminDashboard() {
             if (error) throw error;
 
             toast.success("Saque rejeitado. O saldo foi devolvido ao usuário.");
-            setRejectDialogTxId(null); // Fecha o modal
-            loadAdminData(); // Recarrega a tela
+            setRejectDialogTxId(null);
+            loadAdminData();
         } catch (error) {
             console.error(error);
             toast.error("Erro ao rejeitar saque.");
@@ -366,7 +362,7 @@ export default function AdminDashboard() {
             if (!data?.success) throw new Error(data?.message || "Erro desconhecido na API do Asaas.");
 
             toast.success("Saque aprovado e transferido via PIX com sucesso!");
-            setApproveDialogTx(null); // Fecha o modal
+            setApproveDialogTx(null);
             loadAdminData();
 
         } catch (error: any) {
@@ -407,7 +403,6 @@ export default function AdminDashboard() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {/* Card 1: Saldo nas Carteiras */}
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                             <CardTitle className="text-sm font-medium">Total em Carteiras (Livre)</CardTitle>
@@ -420,7 +415,6 @@ export default function AdminDashboard() {
                         </CardContent>
                     </Card>
 
-                    {/* Card 2: Total Investido em Ativos (O NOVO CARD) */}
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                             <CardTitle className="text-sm font-medium">Total Investido (Em Ativos)</CardTitle>
@@ -436,7 +430,6 @@ export default function AdminDashboard() {
                         </CardContent>
                     </Card>
 
-                    {/* Card 3: Lucro Arrecadado */}
                     <Card className="border-primary/50 bg-primary/5">
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                             <CardTitle className="text-sm font-medium">Lucro Arrecadado (Taxas)</CardTitle>
@@ -453,7 +446,6 @@ export default function AdminDashboard() {
                     </Card>
                 </div>
 
-                {/* LAYOUT DE ABAS NO DASHBOARD PRINCIPAL */}
                 <Tabs defaultValue="users" className="w-full">
                     <TabsList className="grid w-full md:w-[600px] grid-cols-2 mb-6">
                         <TabsTrigger value="users">
@@ -503,8 +495,15 @@ export default function AdminDashboard() {
                                                         </Tooltip>
                                                     </TooltipProvider>
                                                 </TableCell>
-                                                <TableCell className="font-medium">
+                                                {/* 👇 ADICIONADO: Ícone de Verificado na Tabela de Usuários */}
+                                                <TableCell className="font-medium flex items-center gap-2">
                                                     {u.name || "Sem nome"}
+                                                    {u.is_verified && (
+                                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-[#a62681]">
+                                                            <title>Verificado</title>
+                                                            <path fillRule="evenodd" d="M8.603 3.799A4.49 4.49 0 0112 2.25c1.357 0 2.573.6 3.397 1.549a4.49 4.49 0 013.498 1.307 4.491 4.491 0 011.307 3.497A4.49 4.49 0 0121.75 12a4.49 4.49 0 01-1.549 3.397 4.491 4.491 0 01-1.307 3.497 4.491 4.491 0 01-3.497 1.307A4.49 4.49 0 0112 21.75a4.49 4.49 0 01-3.397-1.549 4.49 4.49 0 01-3.498-1.306 4.491 4.491 0 01-1.307-3.498A4.49 4.49 0 012.25 12c0-1.357.6-2.573 1.549-3.397a4.49 4.49 0 011.307-3.497 4.49 4.49 0 013.497-1.307zm7.007 6.387a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clipRule="evenodd" />
+                                                        </svg>
+                                                    )}
                                                     {u.is_blocked && (
                                                         <Badge variant="destructive" className="ml-2 text-[10px] h-5 px-1.5">Bloqueado</Badge>
                                                     )}
@@ -587,13 +586,17 @@ export default function AdminDashboard() {
                             <>
                                 <SheetHeader className="mb-6">
                                     <div className="flex flex-col">
-                                        {/* Agrupamos o Nome e o Status lado a lado */}
                                         <div className="flex items-center gap-3">
-                                            <SheetTitle className="text-2xl">
+                                            {/* 👇 ADICIONADO: Ícone de Verificado no Título da Ficha */}
+                                            <SheetTitle className="text-2xl flex items-center gap-2">
                                                 {selectedUser.name || "Usuário sem nome"}
+                                                {selectedUser.is_verified && (
+                                                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6 text-[#a62681]">
+                                                        <path fillRule="evenodd" d="M8.603 3.799A4.49 4.49 0 0112 2.25c1.357 0 2.573.6 3.397 1.549a4.49 4.49 0 013.498 1.307 4.491 4.491 0 011.307 3.497A4.49 4.49 0 0121.75 12a4.49 4.49 0 01-1.549 3.397 4.491 4.491 0 01-1.307 3.497 4.491 4.491 0 01-3.497 1.307A4.49 4.49 0 0112 21.75a4.49 4.49 0 01-3.397-1.549 4.49 4.49 0 01-3.498-1.306 4.491 4.491 0 01-1.307-3.498A4.49 4.49 0 012.25 12c0-1.357.6-2.573 1.549-3.397a4.49 4.49 0 011.307-3.497 4.49 4.49 0 013.497-1.307zm7.007 6.387a.75.75 0 10-1.22-.872l-3.236 4.53L9.53 12.22a.75.75 0 00-1.06 1.06l2.25 2.25a.75.75 0 001.14-.094l3.75-5.25z" clipRule="evenodd" />
+                                                    </svg>
+                                                )}
                                             </SheetTitle>
 
-                                            {/* Tag Dinâmica de Status */}
                                             {selectedUser.is_blocked ? (
                                                 <Badge variant="destructive" className="bg-red-500 hover:bg-red-600 shadow-sm">
                                                     Conta Bloqueada
@@ -645,7 +648,6 @@ export default function AdminDashboard() {
                                                     <span className="text-xs text-muted-foreground flex items-center gap-1">
                                                         <History className="h-3 w-3" /> Em Ativos
                                                     </span>
-                                                    {/* Removido o text-muted-foreground para destacar o valor e adicionado o cálculo dinâmico */}
                                                     <span className="text-2xl font-bold mt-1">
                                                         R$ {userPortfolio.reduce((acc, item) => {
                                                             const precoAtual = item.athlete_assets?.price_per_token || 0;
@@ -673,18 +675,14 @@ export default function AdminDashboard() {
                                                                                 {isCredit ? <ArrowDownRight className="h-4 w-4 text-green-500" /> : <ArrowUpRight className="h-4 w-4 text-red-500" />}
                                                                             </div>
                                                                             <div>
-                                                                                {/* Define um nome claro para a transação */}
                                                                                 <p className="text-sm font-medium capitalize">
                                                                                     {tx.type === 'deposit' ? 'Crédito / Depósito' : 'Débito / Saque'}
                                                                                 </p>
-
-                                                                                {/* Exibe o motivo do ajuste manual, caso exista */}
                                                                                 {tx.description && (
                                                                                     <p className="text-xs font-semibold text-muted-foreground mt-0.5">
                                                                                         Motivo: {tx.description}
                                                                                     </p>
                                                                                 )}
-
                                                                                 <p className="text-xs text-muted-foreground">{formatDate(tx.created_at)}</p>
                                                                             </div>
                                                                         </div>
@@ -705,7 +703,6 @@ export default function AdminDashboard() {
                                     </TabsContent>
 
                                     <TabsContent value="portfolio" className="space-y-4 mt-4">
-                                        {/* TOKENS EMITIDOS (ATLETAS) */}
                                         <Card className="border-primary/20 shadow-sm">
                                             <CardHeader className="pb-3 border-b bg-muted/20">
                                                 <CardTitle className="text-sm font-bold text-primary flex items-center gap-2">
@@ -750,7 +747,6 @@ export default function AdminDashboard() {
                                             </CardContent>
                                         </Card>
 
-                                        {/* INVENTÁRIO NA CARTEIRA (INVESTIDORES) */}
                                         <Card className="shadow-sm">
                                             <CardHeader className="pb-3 border-b">
                                                 <CardTitle className="text-sm font-bold flex items-center gap-2">
@@ -800,6 +796,30 @@ export default function AdminDashboard() {
                                     </TabsContent>
 
                                     <TabsContent value="actions" className="space-y-4 mt-4">
+                                        {/* 👇 ADICIONADO: Card de Verificação de Perfil */}
+                                        <Card className="border-purple-500/50 mb-4">
+                                            <CardHeader>
+                                                <CardTitle className="text-sm flex items-center gap-2 text-purple-600">
+                                                    Status de Verificação Oficial
+                                                </CardTitle>
+                                            </CardHeader>
+                                            <CardContent>
+                                                <p className="text-xs text-muted-foreground mb-4">
+                                                    {selectedUser.is_verified
+                                                        ? "Este perfil já possui o selo de verificação oficial da plataforma."
+                                                        : "Aprove este perfil para receber a animação cósmica e o selo de verificado na vitrine."}
+                                                </p>
+                                                <Button
+                                                    variant={selectedUser.is_verified ? "outline" : "default"}
+                                                    className={`w-full ${!selectedUser.is_verified ? "bg-[#a62681] hover:bg-[#861d67] text-white" : ""}`}
+                                                    onClick={handleToggleVerify}
+                                                    disabled={processing}
+                                                >
+                                                    {processing ? <Loader2 className="w-4 h-4 animate-spin" /> : (selectedUser.is_verified ? "Remover Verificação" : "Verificar Perfil")}
+                                                </Button>
+                                            </CardContent>
+                                        </Card>
+
                                         <Card className="border-yellow-500/50">
                                             <CardHeader>
                                                 <CardTitle className="text-sm flex items-center gap-2 text-yellow-600">
@@ -877,7 +897,6 @@ export default function AdminDashboard() {
                     </SheetContent>
                 </Sheet>
 
-                {/* MODAL DE APROVAÇÃO DE SAQUE */}
                 <Dialog open={!!approveDialogTx} onOpenChange={(open) => !open && setApproveDialogTx(null)}>
                     <DialogContent>
                         <DialogHeader>
@@ -904,7 +923,6 @@ export default function AdminDashboard() {
                     </DialogContent>
                 </Dialog>
 
-                {/* MODAL DE REJEIÇÃO DE SAQUE */}
                 <Dialog open={!!rejectDialogTxId} onOpenChange={(open) => !open && setRejectDialogTxId(null)}>
                     <DialogContent>
                         <DialogHeader>
@@ -926,7 +944,7 @@ export default function AdminDashboard() {
                         </DialogFooter>
                     </DialogContent>
                 </Dialog>
-            </div >
-        </div >
+            </div>
+        </div>
     );
 }

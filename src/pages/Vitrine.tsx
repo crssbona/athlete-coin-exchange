@@ -19,17 +19,36 @@ const Vitrine = () => {
 
     const loadAthletes = async () => {
         try {
-            const { data, error } = await supabase
+            // 1. Busca todos os tokens (sem tentar fazer o join que causava o erro)
+            const { data: tokensData, error } = await supabase
                 .from('athlete_tokens')
                 .select('*');
 
             if (error) throw error;
 
-            // Converter os registros do banco para o tipo Athlete
-            const supabaseAthletes: Athlete[] = (data || [])
+            // 2. Extrai os IDs dos usuários e busca as verificações na tabela profiles
+            const userIds = tokensData?.map(t => t.user_id).filter(Boolean) || [];
+
+            const verifiedMap = new Map();
+
+            if (userIds.length > 0) {
+                const { data: profilesData } = await supabase
+                    .from('vw_public_profiles')
+                    .select('id, is_verified')
+                    .in('id', userIds);
+
+                // Cria um mapa rápido para vincular o user_id ao status de verificação
+                profilesData?.forEach(p => {
+                    verifiedMap.set(p.id, p.is_verified);
+                });
+            }
+
+            // 3. Monta a lista final juntando as duas informações
+            const supabaseAthletes: Athlete[] = (tokensData || [])
                 .filter(token => token.athlete_name && token.sport)
                 .map(token => ({
                     id: token.athlete_id,
+                    isVerified: verifiedMap.get(token.user_id) || false, // <-- Puxa do nosso mapa
                     name: token.athlete_name,
                     sport: token.sport,
                     avatar: token.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${token.athlete_name}`,
@@ -49,11 +68,9 @@ const Vitrine = () => {
                     }
                 }));
 
-            // Agora define APENAS os atletas reais da base de dados
             setAthletes(supabaseAthletes);
         } catch (error) {
             console.error('Erro ao carregar atletas:', error);
-            // Em caso de erro, a vitrine fica vazia em vez de carregar perfis falsos
             setAthletes([]);
         } finally {
             setLoading(false);
@@ -75,7 +92,6 @@ const Vitrine = () => {
 
             <main className="pt-24 pb-12">
                 <div className="container mx-auto px-4">
-                    {/* Cabeçalho */}
                     <div className="mb-8">
                         <div className="flex items-center gap-2 mb-4">
                             <Users className="w-8 h-8 text-primary" />
@@ -86,7 +102,6 @@ const Vitrine = () => {
                         </p>
                     </div>
 
-                    {/* Filtros de Busca */}
                     <div className="flex flex-col md:flex-row gap-4 mb-8">
                         <div className="relative flex-1">
                             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-muted-foreground" />
@@ -111,7 +126,6 @@ const Vitrine = () => {
                         </Select>
                     </div>
 
-                    {/* Grid de Atletas */}
                     {loading ? (
                         <div className="text-center py-12">
                             <p className="text-xl text-muted-foreground">Carregando vitrine...</p>
