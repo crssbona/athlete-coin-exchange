@@ -136,13 +136,13 @@ export const Navbar = () => {
             renderUserMenuDesktop()
           ) : (
             <>
-              <Link to="/auth">
+              <Link to="/auth?tab=login">
                 <Button variant="outline" size="sm">
                   <User className="w-4 h-4 mr-2" />
                   Entrar
                 </Button>
               </Link>
-              <Link to="/auth">
+              <Link to="/auth?tab=signup">
                 <Button variant="hero" size="sm">
                   Criar Conta
                 </Button>
@@ -215,10 +215,10 @@ export const Navbar = () => {
                   </div>
                 ) : (
                   <div className="flex flex-col gap-3">
-                    <Button variant="outline" className="w-full justify-center h-12" onClick={() => handleNavigation('/auth')}>
+                    <Button variant="outline" className="w-full justify-center h-12" onClick={() => handleNavigation('/auth?tab=login')}>
                       <User className="w-4 h-4 mr-2" /> Entrar
                     </Button>
-                    <Button variant="default" className="w-full justify-center bg-primary h-12" onClick={() => handleNavigation('/auth')}>
+                    <Button variant="default" className="w-full justify-center bg-primary h-12" onClick={() => handleNavigation('/auth?tab=signup')}>
                       Criar Conta
                     </Button>
                   </div>

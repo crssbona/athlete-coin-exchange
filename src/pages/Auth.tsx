@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -59,6 +59,11 @@ const isValidCNPJ = (cnpj: string) => {
 };
 
 const Auth = () => {
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  // Se a URL tiver ?tab=signup, abre a aba signup. Senão, padrão é login.
+  const currentTab = searchParams.get("tab") === "signup" ? "signup" : "login";
+
   const [isLoading, setIsLoading] = useState(false);
   const [keepConnected, setKeepConnected] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
@@ -273,7 +278,7 @@ const Auth = () => {
           <img src={logoInferior} alt="Logo Opatrocinador" height={250} width={250} />
         </Link>
 
-        <Tabs defaultValue="login" className="w-full">
+        <Tabs value={currentTab} onValueChange={(val) => setSearchParams({ tab: val })} className="w-full">
           <TabsList className="grid w-full grid-cols-2 mb-6">
             <TabsTrigger value="login">Entrar</TabsTrigger>
             <TabsTrigger value="signup">Criar Conta</TabsTrigger>
