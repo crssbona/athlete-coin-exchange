@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Coins, Plus, DollarSign, Pencil, Loader2, UploadCloud, User, X, ImageIcon, TrendingUp, TrendingDown } from "lucide-react";
 import Cropper from 'react-easy-crop';
 import { toast } from "sonner";
+import { Switch } from "@/components/ui/switch";
 
 // --- FUNÇÕES AJUDANTES PARA O CORTE DA IMAGEM ---
 const createImage = (url: string): Promise<HTMLImageElement> =>
@@ -104,6 +105,7 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
   const [newAssetPhoto, setNewAssetPhoto] = useState("");
   const [uploadingAssetPhoto, setUploadingAssetPhoto] = useState(false);
   const assetPhotoInputRef = useRef<HTMLInputElement>(null);
+  const [newAssetRoyalties, setNewAssetRoyalties] = useState(true);
 
   // Estados do Crop, Upload e Arquivo (Perfil)
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
@@ -391,7 +393,9 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
           price_per_token: newAssetPrice,
           market_cap: marketCap,
           price_change_24h: 0,
-          volume_24h: 0
+          volume_24h: 0,
+          // ADICIONE ESTA LINHA PARA SALVAR NO BANCO:
+          has_royalties: newAssetRoyalties
         });
 
       if (error) throw error;
@@ -406,6 +410,8 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
       setNewAssetPrice(10);
       setNewAssetYoutube("");
       setNewAssetPhoto("");
+      // ADICIONE ESTA LINHA PARA RESETAR O SWITCH:
+      setNewAssetRoyalties(true);
 
       loadProfileAndAssets();
     } catch (error: any) {
@@ -719,8 +725,57 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
                   <div>
                     <Label htmlFor="assetPrice">Preço por Token (R$) *</Label>
                     <Input id="assetPrice" type="number" min="0.01" step="0.01" value={newAssetPrice} onChange={(e) => setNewAssetPrice(Number(e.target.value))} />
+                    {/* --- NOVA MENSAGEM DE TRANSPARÊNCIA --- */}
+                    {newAssetPrice > 0 && (
+                      <div className="mt-2 text-xs text-muted-foreground p-2 bg-muted/50 rounded border border-border/50">
+                        <div className="flex justify-between mb-1">
+                          <span>Taxa Opatrocinador (5%):</span>
+                          <span className="text-red-500/80">
+                            - {new Intl.NumberFormat('pt-BR', {
+                              style: 'currency',
+                              currency: 'BRL',
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 4
+                            }).format(newAssetPrice * 0.05)}
+                          </span>
+                        </div>
+                        <div className="flex justify-between font-medium">
+                          <span>Você recebe (por venda):</span>
+                          <span className="text-green-600 dark:text-green-500">
+                            {new Intl.NumberFormat('pt-BR', {
+                              style: 'currency',
+                              currency: 'BRL',
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 4
+                            }).format(newAssetPrice * 0.95)}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+                    {/* -------------------------------------- */}
                   </div>
                 </div>
+
+                {/* --- ADICIONE ESTE BLOCO NOVO AQUI --- */}
+                <div className="border-t pt-4 mt-2">
+                  <div className="flex flex-row items-center justify-between rounded-lg border p-4">
+                    <div className="space-y-0.5 mr-4">
+                      <Label className="text-base font-semibold">
+                        Royalties no Mercado Secundário
+                      </Label>
+                      <div className="text-sm text-muted-foreground mt-1">
+                        {newAssetRoyalties
+                          ? "Ativado: Você receberá 2% de comissão passiva em todas as futuras negociações deste ativo entre patrocinadores."
+                          : "Desativado: Você não receberá comissões passivas futuras."}
+                      </div>
+                    </div>
+                    <Switch
+                      checked={newAssetRoyalties}
+                      onCheckedChange={setNewAssetRoyalties}
+                    />
+                  </div>
+                </div>
+                {/* ------------------------------------- */}
 
               </div>
               <DialogFooter>

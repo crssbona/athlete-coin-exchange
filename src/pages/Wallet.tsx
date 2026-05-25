@@ -479,7 +479,10 @@ export default function WalletPage() {
                                                 const isRejected = tx.status === 'rejected';
 
                                                 const isApprovedPix = !isDeposit && tx.status === 'completed' && tx.description?.includes('PIX Asaas');
-                                                const isManualAdjustment = !!tx.description && !isApprovedPix;
+                                                // ADICIONADO: Identifica se é uma venda de tokens lendo a descrição do banco
+                                                const isTokenSale = isDeposit && tx.description?.includes('Venda de Tokens');
+                                                // ATUALIZADO: Ajuste manual agora exclui as vendas de tokens
+                                                const isManualAdjustment = !!tx.description && !isApprovedPix && !isTokenSale;
 
                                                 // Definindo o ícone e a cor principal
                                                 let iconColorBg = 'bg-red-500/20 text-red-500';
@@ -493,7 +496,7 @@ export default function WalletPage() {
                                                     Icon = CheckCircle2;
                                                 } else if (isRejected) {
                                                     iconColorBg = 'bg-red-500/20 text-red-500';
-                                                    Icon = XCircle; // Ícone de "X" para rejeitados
+                                                    Icon = XCircle;
                                                 } else if (isPending) {
                                                     iconColorBg = 'bg-amber-500/20 text-amber-500';
                                                     Icon = Clock;
@@ -507,22 +510,30 @@ export default function WalletPage() {
                                                             </div>
                                                             <div className="flex flex-col">
                                                                 <div className="flex items-center gap-2">
-                                                                    <p className={`text-sm font-medium ${isApprovedPix ? 'text-green-500' : isRejected ? 'text-red-500' : ''}`}>
-                                                                        {isApprovedPix ? 'Saque Aprovado'
-                                                                            : isRejected ? 'Saque Rejeitado'
-                                                                                : isManualAdjustment
-                                                                                    ? (isDeposit ? 'Crédito do Opatrocinador' : 'Débito do Opatrocinador')
-                                                                                    : (isDeposit ? 'Depósito PIX' : 'Saque PIX')
+                                                                    <p className={`text-sm font-medium ${isApprovedPix || isTokenSale ? 'text-green-500' : isRejected ? 'text-red-500' : ''}`}>
+                                                                        {/* ATUALIZADO: Nova lógica de títulos */}
+                                                                        {isTokenSale ? 'Venda de Ativo'
+                                                                            : isApprovedPix ? 'Saque Aprovado'
+                                                                                : isRejected ? 'Saque Rejeitado'
+                                                                                    : isManualAdjustment
+                                                                                        ? (isDeposit ? 'Crédito do Opatrocinador' : 'Débito do Opatrocinador')
+                                                                                        : (isDeposit ? 'Depósito PIX' : 'Saque PIX')
                                                                         }
                                                                     </p>
 
-                                                                    {/* Mantém a tag apenas para pendentes, pois o título já deixa claro os outros status */}
                                                                     {isPending && <span className="inline-flex items-center rounded-md border border-amber-500/50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-500">Em Análise</span>}
                                                                 </div>
 
                                                                 {isManualAdjustment && (
                                                                     <p className="text-[11px] font-semibold text-muted-foreground mt-0.5 max-w-[150px] truncate" title={tx.description}>
                                                                         Motivo: {tx.description}
+                                                                    </p>
+                                                                )}
+
+                                                                {/* ADICIONADO: Exibe o nome do ativo vendido com destaque */}
+                                                                {isTokenSale && (
+                                                                    <p className="text-[11px] font-semibold text-green-600/80 mt-0.5 max-w-[200px] truncate" title={tx.description}>
+                                                                        {tx.description}
                                                                     </p>
                                                                 )}
 
@@ -543,7 +554,6 @@ export default function WalletPage() {
                                                                 </p>
                                                             </div>
                                                         </div>
-                                                        {/* Se for rejeitado, aplica um risco no valor (line-through) e deixa cinza */}
                                                         <p className={`font-semibold ${isRejected ? 'text-muted-foreground line-through' : (isDeposit || isApprovedPix ? 'text-green-500' : (isPending ? 'text-amber-500' : 'text-foreground'))}`}>
                                                             {isDeposit ? '+' : '-'} R$ {Math.abs(tx.amount).toFixed(2)}
                                                         </p>

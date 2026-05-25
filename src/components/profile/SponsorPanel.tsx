@@ -596,11 +596,42 @@ export function SponsorPanel({ userId }: SponsorPanelProps) {
                   Venda abaixo ou igual: imediata. Acima: ordem em espera.
                 </p>
               </div>
-              <div className="p-4 rounded-lg bg-secondary/50 border border-border">
-                <p className="text-sm text-muted-foreground mb-1">Total da venda</p>
-                <p className="text-2xl font-bold">
-                  R$ {(sellQuantity * (parseFloat(sellPrice) || 0)).toFixed(2)}
-                </p>
+              <div className="p-4 rounded-lg bg-secondary/50 border border-border space-y-2">
+                <div className="flex justify-between items-center text-sm text-muted-foreground mb-1">
+                  <span>Valor Bruto:</span>
+                  <span>
+                    {new Intl.NumberFormat('pt-BR', {
+                      style: 'currency',
+                      currency: 'BRL',
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 4
+                    }).format(sellQuantity * (parseFloat(sellPrice) || 0))}
+                  </span>
+                </div>
+
+                <div className="flex justify-between items-center text-sm text-red-500/80 mb-2 border-b border-border/50 pb-2">
+                  <span>Taxa da Plataforma (5%):</span>
+                  <span>
+                    - {new Intl.NumberFormat('pt-BR', {
+                      style: 'currency',
+                      currency: 'BRL',
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 4
+                    }).format((sellQuantity * (parseFloat(sellPrice) || 0)) * 0.05)}
+                  </span>
+                </div>
+
+                <div className="flex justify-between items-end pt-1">
+                  <p className="text-sm font-medium text-foreground">Você recebe:</p>
+                  <p className="text-2xl font-bold text-green-600 dark:text-green-500">
+                    {new Intl.NumberFormat('pt-BR', {
+                      style: 'currency',
+                      currency: 'BRL',
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 4
+                    }).format((sellQuantity * (parseFloat(sellPrice) || 0)) * 0.95)}
+                  </p>
+                </div>
               </div>
             </div>
           )}
