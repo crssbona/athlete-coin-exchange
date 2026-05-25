@@ -21,6 +21,8 @@ import AthleteProfileVitrine from "./pages/AthleteProfileVitrine";
 import AssetTradePage from "./pages/AssetTradePage";
 import Settings from "./pages/Settings";
 import AdminDashboard from "./pages/AdminDashboard";
+import Privacy from "./pages/Privacy";
+import Terms from "./pages/Terms";
 
 const queryClient = new QueryClient();
 
@@ -48,6 +50,8 @@ function App() {
               <Route path="/vitrine-atleta/:id" element={<AthleteProfileVitrine />} />
               <Route path="/ativo/:assetId" element={<AssetTradePage />} />
               <Route path="/admin-secret-access" element={<AdminDashboard />} />
+              <Route path="/privacy" element={<Privacy />} />
+              <Route path="/terms" element={<Terms />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>

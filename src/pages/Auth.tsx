@@ -540,13 +540,13 @@ const Auth = () => {
 
                   <p className="text-xs text-center text-muted-foreground">
                     Ao criar uma conta, você concorda com nossos{" "}
-                    <a href="#" className="text-primary hover:underline">
+                    <Link to="/terms" className="text-primary hover:underline">
                       Termos de Serviço
-                    </a>{" "}
+                    </Link>{" "}
                     e{" "}
-                    <a href="#" className="text-primary hover:underline">
+                    <Link to="/privacy" className="text-primary hover:underline">
                       Política de Privacidade
-                    </a>
+                    </Link>
                   </p>
                 </form>
               </CardContent>
