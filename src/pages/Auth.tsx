@@ -7,7 +7,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Eye, EyeOff } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/lib/supabase";
@@ -61,13 +62,19 @@ const isValidCNPJ = (cnpj: string) => {
 const Auth = () => {
 
   const [searchParams, setSearchParams] = useSearchParams();
-  // Se a URL tiver ?tab=signup, abre a aba signup. Senão, padrão é login.
   const currentTab = searchParams.get("tab") === "signup" ? "signup" : "login";
 
   const [isLoading, setIsLoading] = useState(false);
   const [keepConnected, setKeepConnected] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  // Estados Dinâmicos (Convites e Lista de Espera)
+  const [isInviteOnly, setIsInviteOnly] = useState(false);
+  const [inviteCode, setInviteCode] = useState("");
+  const [isWaitlistOpen, setIsWaitlistOpen] = useState(false);
+  const [isWaitlistLoading, setIsWaitlistLoading] = useState(false);
+  const [waitlistData, setWaitlistData] = useState({ name: "", email: "", phone: "" });
 
   // Estados para Formatação de Documento
   const [docType, setDocType] = useState<string>("cpf");
@@ -80,16 +87,29 @@ const Auth = () => {
   const navigate = useNavigate();
   const { user, signIn, signUp } = useAuth();
 
+  // 👇 ATUALIZADO: Agora usa a função segura (RPC) para checar o modo de convite
+  useEffect(() => {
+    const fetchPlatformSettings = async () => {
+      try {
+        const { data, error } = await supabase.rpc('get_invite_mode');
+        if (!error && data !== null) {
+          setIsInviteOnly(data);
+        }
+      } catch (error) {
+        console.error("Erro ao checar modo de convite", error);
+      }
+    };
+    fetchPlatformSettings();
+  }, []);
+
   useEffect(() => {
     if (user) {
       navigate('/');
     }
   }, [user, navigate]);
 
-  // Função para formatar o documento em tempo real
   const handleDocumentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let value = e.target.value.replace(/\D/g, '');
-
     if (docType === 'cpf') {
       if (value.length > 11) value = value.slice(0, 11);
       value = value.replace(/(\d{3})(\d)/, '$1.$2');
@@ -102,24 +122,18 @@ const Auth = () => {
       value = value.replace(/\.(\d{3})(\d)/, '.$1/$2');
       value = value.replace(/(\d{4})(\d)/, '$1-$2');
     }
-
     setDocValue(value);
   };
 
-  // Função para formatar o telefone em tempo real
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let value = e.target.value.replace(/\D/g, '');
-
     if (phoneCode === '+55') {
-      // Máscara do Brasil: (XX) XXXXX-XXXX
       if (value.length > 11) value = value.slice(0, 11);
       if (value.length > 2) value = value.replace(/^(\d{2})(\d)/g, '($1) $2');
       if (value.length > 9) value = value.replace(/(\d{4,5})(\d{4})$/, '$1-$2');
     } else {
-      // Genérico para outros países (sem pontuação fixa)
       if (value.length > 15) value = value.slice(0, 15);
     }
-
     setPhoneValue(value);
   };
 
@@ -168,53 +182,24 @@ const Auth = () => {
     const email = formData.get("email") as string;
     const password = formData.get("password") as string;
     const confirmPassword = formData.get("confirmPassword") as string;
-
     const documentNumber = docValue.replace(/\D/g, '');
-    const finalPhone = `${phoneCode} ${phoneValue}`; // Junta o DDI com o número formatado
+    const finalPhone = `${phoneCode} ${phoneValue}`;
 
-    // Validações
-    if (password !== confirmPassword) {
-      toast.error("As senhas não coincidem");
+    if (password !== confirmPassword) { toast.error("As senhas não coincidem"); setIsLoading(false); return; }
+    if (password.length < 8) { toast.error("A senha deve ter no mínimo 8 caracteres"); setIsLoading(false); return; }
+    if (!email.includes('@')) { toast.error("Email inválido"); setIsLoading(false); return; }
+    if (phoneValue.replace(/\D/g, '').length < 8) { toast.error("Número de telefone muito curto."); setIsLoading(false); return; }
+
+    if (docType === 'cpf' && !isValidCPF(documentNumber)) { toast.error("O CPF digitado é inválido."); setIsLoading(false); return; }
+    if (docType === 'cnpj' && !isValidCNPJ(documentNumber)) { toast.error("O CNPJ digitado é inválido."); setIsLoading(false); return; }
+
+    if (isInviteOnly && !inviteCode.trim()) {
+      toast.error("Código de convite é obrigatório nesta fase.");
       setIsLoading(false);
       return;
     }
 
-    if (password.length < 8) {
-      toast.error("A senha deve ter no mínimo 8 caracteres");
-      setIsLoading(false);
-      return;
-    }
-
-    if (!email.includes('@')) {
-      toast.error("Email inválido");
-      setIsLoading(false);
-      return;
-    }
-
-    if (phoneValue.replace(/\D/g, '').length < 8) {
-      toast.error("Número de telefone muito curto.");
-      setIsLoading(false);
-      return;
-    }
-
-    // Validação Matemática de Documento
-    if (docType === 'cpf' && !isValidCPF(documentNumber)) {
-      toast.error("O CPF digitado é inválido.");
-      setIsLoading(false);
-      return;
-    }
-
-    if (docType === 'cnpj' && !isValidCNPJ(documentNumber)) {
-      toast.error("O CNPJ digitado é inválido.");
-      setIsLoading(false);
-      return;
-    }
-
-    // Verifica duplicação no banco de dados
-    const { data: documentExists } = await supabase.rpc('check_document_exists', {
-      p_document: documentNumber
-    });
-
+    const { data: documentExists } = await supabase.rpc('check_document_exists', { p_document: documentNumber });
     if (documentExists) {
       toast.error(`Este ${docType.toUpperCase()} já está vinculado a uma conta existente.`);
       setIsLoading(false);
@@ -224,20 +209,23 @@ const Auth = () => {
     const { data, error } = await signUp(email, password, {
       first_name: firstName,
       last_name: lastName,
-      phone: finalPhone, // Usa o telefone combinado
+      phone: finalPhone,
       document_type: docType,
-      document_number: documentNumber
+      document_number: documentNumber,
+      invite_code: isInviteOnly ? inviteCode.trim() : undefined
     });
 
     setIsLoading(false);
 
     if (error) {
-      if (error.message.includes("already registered") || error.message.includes("already been registered")) {
+      if (error.message.includes("Código de convite inválido ou já utilizado")) {
+        toast.error("Código de convite inválido ou já utilizado.");
+      } else if (error.message.includes("already registered")) {
         toast.error("Este email já está vinculado à uma conta");
       } else if (error.message.includes("Password")) {
         toast.error("Senha muito fraca. Use letras, números e caracteres especiais.");
       } else {
-        toast.error("Erro ao criar conta. Tente novamente.");
+        toast.error("Erro ao criar conta. Verifique o código de convite e os dados.");
       }
       return;
     }
@@ -256,24 +244,52 @@ const Auth = () => {
         });
 
       if (profileError) {
-        console.error('Error creating profile:', profileError);
         toast.error("Conta criada, mas houve um erro ao salvar seus dados. Entre em contato com o suporte.");
       }
     }
 
-    toast.success("Conta criada com sucesso!");
+    toast.success("Conta criada com sucesso! Bem-vindo ao Opatrocinador.");
+  };
+
+  const handleJoinWaitlist = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsWaitlistLoading(true);
+
+    try {
+      const { error } = await supabase.from('waitlist').insert({
+        name: waitlistData.name,
+        email: waitlistData.email,
+        phone: waitlistData.phone
+      });
+
+      if (error) {
+        if (error.code === '23505') {
+          throw new Error("Este e-mail já está na nossa lista de espera!");
+        }
+        throw error;
+      }
+
+      toast.success("Você entrou para a lista de espera!", {
+        description: "Avisaremos por e-mail e WhatsApp assim que liberarmos sua conta."
+      });
+      setIsWaitlistOpen(false);
+      setWaitlistData({ name: "", email: "", phone: "" });
+
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao entrar na lista. Tente novamente.");
+    } finally {
+      setIsWaitlistLoading(false);
+    }
   };
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      {/* Background decoration */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-20 left-20 w-72 h-72 bg-primary/20 rounded-full blur-3xl animate-pulse" />
         <div className="absolute bottom-20 right-20 w-96 h-96 bg-accent/20 rounded-full blur-3xl animate-pulse delay-1000" />
       </div>
 
       <div className="w-full max-w-md relative z-10">
-        {/* Logo/Header */}
         <Link to="/" className="flex items-center justify-center gap-2 mb-8">
           <img src={logoInferior} alt="Logo Opatrocinador" height={250} width={250} />
         </Link>
@@ -284,269 +300,139 @@ const Auth = () => {
             <TabsTrigger value="signup">Criar Conta</TabsTrigger>
           </TabsList>
 
-          {/* Login Tab */}
           <TabsContent value="login">
             <Card>
               <CardHeader>
                 <CardTitle>Bem-vindo de volta</CardTitle>
-                <CardDescription>
-                  Entre com suas credenciais para acessar sua conta
-                </CardDescription>
+                <CardDescription>Entre com suas credenciais para acessar sua conta</CardDescription>
               </CardHeader>
               <CardContent>
                 <form onSubmit={handleLogin} className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="login-email">Email</Label>
-                    <Input
-                      id="login-email"
-                      name="email"
-                      type="email"
-                      placeholder="seu@email.com"
-                      required
-                      disabled={isLoading}
-                    />
+                    <Input id="login-email" name="email" type="email" placeholder="seu@email.com" required disabled={isLoading} />
                   </div>
 
                   <div className="space-y-2">
                     <Label htmlFor="login-password">Senha</Label>
                     <div className="relative">
-                      <Input
-                        id="login-password"
-                        name="password"
-                        type={showPassword ? "text" : "password"}
-                        placeholder="••••••••"
-                        required
-                        disabled={isLoading}
-                        className="pr-10"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-primary transition-colors"
-                      >
+                      <Input id="login-password" name="password" type={showPassword ? "text" : "password"} placeholder="••••••••" required disabled={isLoading} className="pr-10" />
+                      <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-primary transition-colors">
                         {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
                     </div>
                   </div>
 
-                  {/* Checkbox de Manter Conectado */}
                   <div className="flex items-center space-x-2 py-2">
-                    <Checkbox
-                      id="keep-connected"
-                      checked={keepConnected}
-                      onCheckedChange={(checked) => setKeepConnected(checked as boolean)}
-                    />
-                    <label
-                      htmlFor="keep-connected"
-                      className="text-sm font-medium leading-none cursor-pointer"
-                    >
-                      Manter conectado
-                    </label>
+                    <Checkbox id="keep-connected" checked={keepConnected} onCheckedChange={(checked) => setKeepConnected(checked as boolean)} />
+                    <label htmlFor="keep-connected" className="text-sm font-medium leading-none cursor-pointer">Manter conectado</label>
                   </div>
 
-                  <Button
-                    type="submit"
-                    variant="hero"
-                    className="w-full"
-                    disabled={isLoading}
-                  >
-                    {isLoading ? "Entrando..." : "Entrar"}
-                  </Button>
+                  <Button type="submit" variant="hero" className="w-full" disabled={isLoading}>{isLoading ? "Entrando..." : "Entrar"}</Button>
 
                   <div className="text-center text-sm">
-                    <Link to="/forgot-password" className="text-muted-foreground hover:text-primary transition-colors">
-                      Esqueceu sua senha?
-                    </Link>
+                    <Link to="/forgot-password" className="text-muted-foreground hover:text-primary transition-colors">Esqueceu sua senha?</Link>
                   </div>
                 </form>
               </CardContent>
             </Card>
           </TabsContent>
 
-          {/* Signup Tab */}
           <TabsContent value="signup">
             <Card>
               <CardHeader>
                 <CardTitle>Criar nova conta</CardTitle>
-                <CardDescription>
-                  Preencha os dados abaixo para começar
-                </CardDescription>
+                <CardDescription>Preencha os dados abaixo para começar</CardDescription>
               </CardHeader>
               <CardContent>
                 <form onSubmit={handleSignup} className="space-y-4">
-                  {/* Name Fields */}
+
+                  {/* 👇 CAMPO DE CONVITE MOVIDO PARA O TOPO DO FORMULÁRIO */}
+                  {isInviteOnly && (
+                    <div className="space-y-2 p-4 bg-muted/30 rounded-lg border border-primary/20 mb-4">
+                      <Label htmlFor="signup-invite" className="flex items-center gap-2 text-primary font-bold">
+                        Código de Convite <span className="text-red-500">*</span>
+                      </Label>
+                      <Input
+                        id="signup-invite"
+                        type="text"
+                        placeholder="Ex: OPA-XXXXXX"
+                        value={inviteCode}
+                        onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
+                        required={isInviteOnly}
+                        disabled={isLoading}
+                        className="uppercase font-mono tracking-wider border-primary/50 bg-background"
+                      />
+                      <p className="text-xs text-muted-foreground mt-2">
+                        Ainda não tem um convite?{" "}
+                        <button type="button" onClick={() => setIsWaitlistOpen(true)} className="text-primary font-semibold hover:underline">
+                          Entre para a Lista de Espera
+                        </button>
+                      </p>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="signup-firstname">Nome</Label>
-                      <Input
-                        id="signup-firstname"
-                        name="firstName"
-                        type="text"
-                        placeholder="Seu nome"
-                        required
-                        disabled={isLoading}
-                      />
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="signup-lastname">Sobrenome</Label>
-                      <Input
-                        id="signup-lastname"
-                        name="lastName"
-                        type="text"
-                        placeholder="Seu sobrenome"
-                        required
-                        disabled={isLoading}
-                      />
-                    </div>
+                    <div className="space-y-2"><Label>Nome</Label><Input name="firstName" type="text" placeholder="Seu nome" required disabled={isLoading} /></div>
+                    <div className="space-y-2"><Label>Sobrenome</Label><Input name="lastName" type="text" placeholder="Seu sobrenome" required disabled={isLoading} /></div>
                   </div>
 
-                  {/* Email */}
                   <div className="space-y-2">
-                    <Label htmlFor="signup-email">Email</Label>
-                    <Input
-                      id="signup-email"
-                      name="email"
-                      type="email"
-                      placeholder="seu@email.com"
-                      required
-                      disabled={isLoading}
-                    />
+                    <Label>Email</Label><Input name="email" type="email" placeholder="seu@email.com" required disabled={isLoading} />
                   </div>
 
-                  {/* NOVO: Telefone com Seletor de País */}
                   <div className="space-y-2">
                     <Label>Telefone/WhatsApp</Label>
                     <div className="flex gap-2">
-                      <Select
-                        value={phoneCode}
-                        onValueChange={(val) => {
-                          setPhoneCode(val);
-                          setPhoneValue(""); // Limpa o campo se trocar de país para evitar bugs
-                        }}
-                      >
-                        <SelectTrigger className="w-[110px]" disabled={isLoading}>
-                          <SelectValue placeholder="DDI" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="+55">🇧🇷 +55</SelectItem>
-                        </SelectContent>
+                      <Select value={phoneCode} onValueChange={(val) => { setPhoneCode(val); setPhoneValue(""); }}>
+                        <SelectTrigger className="w-[110px]" disabled={isLoading}><SelectValue placeholder="DDI" /></SelectTrigger>
+                        <SelectContent><SelectItem value="+55">🇧🇷 +55</SelectItem></SelectContent>
                       </Select>
-                      <Input
-                        id="signup-phone"
-                        type="tel"
-                        placeholder={phoneCode === '+55' ? "(00) 00000-0000" : "000000000"}
-                        value={phoneValue}
-                        onChange={handlePhoneChange}
-                        required
-                        disabled={isLoading}
-                        className="flex-1"
-                      />
+                      <Input type="tel" placeholder={phoneCode === '+55' ? "(00) 00000-0000" : "000000000"} value={phoneValue} onChange={handlePhoneChange} required disabled={isLoading} className="flex-1" />
                     </div>
                   </div>
 
-                  {/* Document Fields */}
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>Tipo de Documento</Label>
-                      <Select
-                        value={docType}
-                        onValueChange={(val) => {
-                          setDocType(val);
-                          setDocValue("");
-                        }}
-                      >
-                        <SelectTrigger disabled={isLoading}>
-                          <SelectValue placeholder="Selecione" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="cpf">CPF</SelectItem>
-                          <SelectItem value="cnpj">CNPJ</SelectItem>
-                        </SelectContent>
+                      <Select value={docType} onValueChange={(val) => { setDocType(val); setDocValue(""); }}>
+                        <SelectTrigger disabled={isLoading}><SelectValue placeholder="Selecione" /></SelectTrigger>
+                        <SelectContent><SelectItem value="cpf">CPF</SelectItem><SelectItem value="cnpj">CNPJ</SelectItem></SelectContent>
                       </Select>
                     </div>
-
                     <div className="space-y-2">
-                      <Label htmlFor="signup-docnumber">Número do Documento</Label>
-                      <Input
-                        id="signup-docnumber"
-                        type="text"
-                        placeholder={docType === 'cpf' ? "000.000.000-00" : "00.000.000/0000-00"}
-                        value={docValue}
-                        onChange={handleDocumentChange}
-                        required
-                        disabled={isLoading}
-                      />
+                      <Label>Número do Documento</Label>
+                      <Input type="text" placeholder={docType === 'cpf' ? "000.000.000-00" : "00.000.000/0000-00"} value={docValue} onChange={handleDocumentChange} required disabled={isLoading} />
                     </div>
                   </div>
 
-                  {/* Password Fields */}
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="signup-password">Senha</Label>
+                      <Label>Senha</Label>
                       <div className="relative">
-                        <Input
-                          id="signup-password"
-                          name="password"
-                          type={showPassword ? "text" : "password"}
-                          placeholder="Mínimo 8"
-                          required
-                          disabled={isLoading}
-                          minLength={8}
-                          className="pr-10"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowPassword(!showPassword)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-primary transition-colors"
-                        >
+                        <Input name="password" type={showPassword ? "text" : "password"} placeholder="Mínimo 8" required disabled={isLoading} minLength={8} className="pr-10" />
+                        <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-primary">
                           {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                         </button>
                       </div>
                     </div>
-
                     <div className="space-y-2">
-                      <Label htmlFor="signup-confirm">Confirmar Senha</Label>
+                      <Label>Confirmar Senha</Label>
                       <div className="relative">
-                        <Input
-                          id="signup-confirm"
-                          name="confirmPassword"
-                          type={showConfirmPassword ? "text" : "password"}
-                          placeholder="Novamente"
-                          required
-                          disabled={isLoading}
-                          minLength={8}
-                          className="pr-10"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-primary transition-colors"
-                        >
+                        <Input name="confirmPassword" type={showConfirmPassword ? "text" : "password"} placeholder="Novamente" required disabled={isLoading} minLength={8} className="pr-10" />
+                        <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-primary">
                           {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                         </button>
                       </div>
                     </div>
                   </div>
 
-                  <Button
-                    type="submit"
-                    variant="hero"
-                    className="w-full"
-                    disabled={isLoading}
-                  >
+                  <Button type="submit" variant="hero" className="w-full mt-2" disabled={isLoading}>
                     {isLoading ? "Criando conta..." : "Criar Conta"}
                   </Button>
 
                   <p className="text-xs text-center text-muted-foreground">
-                    Ao criar uma conta, você concorda com nossos{" "}
-                    <Link to="/terms" className="text-primary hover:underline">
-                      Termos de Serviço
-                    </Link>{" "}
-                    e{" "}
-                    <Link to="/privacy" className="text-primary hover:underline">
-                      Política de Privacidade
-                    </Link>
+                    Ao criar uma conta, você concorda com nossos <Link to="/terms" className="text-primary hover:underline">Termos de Serviço</Link> e <Link to="/privacy" className="text-primary hover:underline">Política de Privacidade</Link>
                   </p>
                 </form>
               </CardContent>
@@ -555,10 +441,59 @@ const Auth = () => {
         </Tabs>
 
         <p className="text-center text-sm text-muted-foreground mt-6">
-          <Link to="/" className="hover:text-primary transition-colors">
-            ← Voltar para home
-          </Link>
+          <Link to="/" className="hover:text-primary transition-colors">← Voltar para home</Link>
         </p>
+
+        <Dialog open={isWaitlistOpen} onOpenChange={setIsWaitlistOpen}>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle className="text-xl">Fila VIP Opatrocinador</DialogTitle>
+              <DialogDescription className="pt-2">
+                Estamos atualmente em fase Beta Exclusiva. Deixe seus dados abaixo e avisaremos você em primeira mão assim que liberarmos novos convites!
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleJoinWaitlist} className="space-y-4 pt-4">
+              <div className="space-y-2">
+                <Label>Nome Completo</Label>
+                <Input
+                  required
+                  placeholder="Como gostaria de ser chamado?"
+                  value={waitlistData.name}
+                  onChange={e => setWaitlistData({ ...waitlistData, name: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>E-mail</Label>
+                <Input
+                  type="email"
+                  required
+                  placeholder="seu@email.com"
+                  value={waitlistData.email}
+                  onChange={e => setWaitlistData({ ...waitlistData, email: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>WhatsApp</Label>
+                <Input
+                  type="tel"
+                  required
+                  placeholder="(00) 00000-0000"
+                  value={waitlistData.phone}
+                  onChange={e => setWaitlistData({ ...waitlistData, phone: e.target.value })}
+                />
+              </div>
+              <DialogFooter className="mt-6">
+                <Button type="button" variant="ghost" onClick={() => setIsWaitlistOpen(false)} disabled={isWaitlistLoading}>
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={isWaitlistLoading} className="bg-primary text-primary-foreground">
+                  {isWaitlistLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+                  Quero Participar
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );
