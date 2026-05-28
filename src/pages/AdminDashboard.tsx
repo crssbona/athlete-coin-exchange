@@ -661,6 +661,7 @@ export default function AdminDashboard() {
                     </SheetContent>
                 </Sheet>
 
+                {/* 👇 NOVO MODAL: Confirmação do Modo Convite */}
                 <Dialog open={showInviteConfirmDialog} onOpenChange={(open) => !open && setShowInviteConfirmDialog(false)}>
                     <DialogContent>
                         <DialogHeader>
