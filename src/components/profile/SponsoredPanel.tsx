@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Coins, Plus, DollarSign, Pencil, Loader2, UploadCloud, User, X, ImageIcon, TrendingUp, TrendingDown } from "lucide-react";
+import { Coins, Plus, DollarSign, Pencil, Loader2, UploadCloud, User, X, ImageIcon, TrendingUp, TrendingDown, Trash2, AlertTriangle } from "lucide-react";
 import Cropper from 'react-easy-crop';
 import { toast } from "sonner";
 import { Switch } from "@/components/ui/switch";
@@ -106,6 +106,13 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
   const [uploadingAssetPhoto, setUploadingAssetPhoto] = useState(false);
   const assetPhotoInputRef = useRef<HTMLInputElement>(null);
   const [newAssetRoyalties, setNewAssetRoyalties] = useState(true);
+  const [isAssetConfirmOpen, setIsAssetConfirmOpen] = useState(false);
+
+  // Estados de exclusão de ativo
+  const [assetToDelete, setAssetToDelete] = useState<Asset | null>(null);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [isDeleteBlockedOpen, setIsDeleteBlockedOpen] = useState(false);
+  const [isDeletingAsset, setIsDeletingAsset] = useState(false);
 
   // Estados do Crop, Upload e Arquivo (Perfil)
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
@@ -125,7 +132,8 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
   const [sport, setSport] = useState("");
   const [description, setDescription] = useState("");
   const [avatarUrl, setAvatarUrl] = useState("");
-  const [achievements, setAchievements] = useState("");
+  const [achievements, setAchievements] = useState<string[]>([]);
+  const [newAchievement, setNewAchievement] = useState("");
   const [twitter, setTwitter] = useState("");
   const [instagram, setInstagram] = useState("");
   const [twitch, setTwitch] = useState("");
@@ -153,7 +161,7 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
         setSport(profileData.sport || "");
         setDescription(profileData.description || "");
         setAvatarUrl(profileData.avatar_url || "");
-        setAchievements(profileData.achievements ? profileData.achievements.join('\n') : "");
+        setAchievements(profileData.achievements || []);
         setTwitter(profileData.social_twitter || "");
         setInstagram(profileData.social_instagram || "");
         setTwitch(profileData.social_twitch || "");
@@ -258,6 +266,56 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
     }
   };
 
+  // --- CONQUISTAS ---
+  const addAchievement = () => {
+    const trimmed = newAchievement.trim();
+    if (!trimmed || achievements.includes(trimmed)) return;
+    setAchievements(prev => [...prev, trimmed]);
+    setNewAchievement("");
+  };
+
+  const removeAchievement = (index: number) => {
+    setAchievements(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const renderAchievementsInput = () => (
+    <div className="flex flex-col gap-2">
+      <Label>Conquistas</Label>
+      {achievements.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {achievements.map((ach, i) => (
+            <span
+              key={i}
+              className="flex items-center gap-1.5 bg-primary/10 text-primary text-sm px-3 py-1 rounded-full border border-primary/20"
+            >
+              {ach}
+              <button
+                type="button"
+                onClick={() => removeAchievement(i)}
+                className="hover:text-destructive transition-colors focus:outline-none"
+                aria-label={`Remover ${ach}`}
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="flex gap-2">
+        <Input
+          value={newAchievement}
+          onChange={(e) => setNewAchievement(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addAchievement(); } }}
+          placeholder="Ex: Campeão Regional 2023"
+        />
+        <Button type="button" variant="outline" onClick={addAchievement}>
+          <Plus className="w-4 h-4 mr-1" />
+          Adicionar
+        </Button>
+      </div>
+    </div>
+  );
+
   // --- FUNÇÕES DE GESTÃO DO PERFIL ---
   const createProfile = async () => {
     try {
@@ -266,7 +324,6 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
         return;
       }
       const athleteId = `athlete-${userId.substring(0, 8)}`;
-      const achievementsArray = achievements.split('\n').filter(a => a.trim());
 
       const { error } = await supabase
         .from('athlete_tokens')
@@ -281,7 +338,7 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
           sport: sport,
           description: description,
           avatar_url: avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${athleteName}`,
-          achievements: achievementsArray,
+          achievements: achievements,
           social_twitter: twitter || null,
           social_instagram: instagram || null,
           social_twitch: twitch || null,
@@ -307,7 +364,6 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
         toast.error('Preencha todos os campos obrigatórios');
         return;
       }
-      const achievementsArray = achievements.split('\n').filter(a => a.trim());
       const { error } = await supabase
         .from('athlete_tokens')
         .update({
@@ -315,7 +371,7 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
           sport: sport,
           description: description,
           avatar_url: avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${athleteName}`,
-          achievements: achievementsArray,
+          achievements: achievements,
           social_twitter: twitter || null,
           social_instagram: instagram || null,
           social_twitch: twitch || null,
@@ -371,12 +427,16 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
   };
 
   // --- NOVA FUNÇÃO: CRIAR NOVO ATIVO ---
+  const handleRequestAssetConfirm = () => {
+    if (!newAssetTitle || !newAssetDescription || newAssetTokens <= 0 || newAssetPrice <= 0) {
+      toast.error("Preencha título, descrição, quantidade e preço validamente.");
+      return;
+    }
+    setIsAssetConfirmOpen(true);
+  };
+
   const createNewAsset = async () => {
     try {
-      if (!newAssetTitle || !newAssetDescription || newAssetTokens <= 0 || newAssetPrice <= 0) {
-        toast.error("Preencha título, descrição, quantidade e preço validamente.");
-        return;
-      }
 
       const marketCap = newAssetTokens * newAssetPrice;
 
@@ -401,6 +461,7 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
       if (error) throw error;
 
       toast.success("Novo ativo gerado com sucesso!");
+      setIsAssetConfirmOpen(false);
       setIsAssetModalOpen(false);
 
       // Limpar formulário do modal
@@ -417,6 +478,37 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
     } catch (error: any) {
       console.error('Erro ao criar ativo:', error);
       toast.error(error.message || "Falha ao criar o ativo");
+    }
+  };
+
+  const handleDeleteClick = (asset: Asset) => {
+    const soldTokens = asset.total_tokens - asset.available_tokens;
+    setAssetToDelete(asset);
+    if (soldTokens > 0) {
+      setIsDeleteBlockedOpen(true);
+    } else {
+      setIsDeleteConfirmOpen(true);
+    }
+  };
+
+  const deleteAsset = async () => {
+    if (!assetToDelete) return;
+    setIsDeletingAsset(true);
+    try {
+      await supabase.from('user_watchlists').delete().eq('asset_id', assetToDelete.id);
+      await supabase.from('pending_asset_purchases').delete().eq('asset_id', assetToDelete.id);
+      await supabase.from('pending_asset_sales').delete().eq('asset_id', assetToDelete.id);
+      const { error } = await supabase.from('athlete_assets').delete().eq('id', assetToDelete.id);
+      if (error) throw error;
+      toast.success("Ativo excluído com sucesso!");
+      setIsDeleteConfirmOpen(false);
+      setAssetToDelete(null);
+      loadProfileAndAssets();
+    } catch (error: any) {
+      console.error('Erro ao excluir ativo:', error);
+      toast.error(error.message || "Falha ao excluir o ativo");
+    } finally {
+      setIsDeletingAsset(false);
     }
   };
 
@@ -553,16 +645,7 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
             {renderAvatarUploadArea()}
             {renderGalleryUploadArea()}
 
-            <div>
-              <Label htmlFor="achievements">Conquistas (uma por linha)</Label>
-              <Textarea
-                id="achievements"
-                value={achievements}
-                onChange={(e) => setAchievements(e.target.value)}
-                placeholder="Campeão Regional 2023&#10;Top 10 Nacional&#10;500+ horas de jogo"
-                rows={3}
-              />
-            </div>
+            {renderAchievementsInput()}
 
             <div className="border-t pt-4 mb-4">
               <h3 className="font-semibold mb-3">Redes Sociais (opcional)</h3>
@@ -615,12 +698,13 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
                     <TableHead className="text-right">Vendidos</TableHead>
                     <TableHead className="text-right">Receita Total</TableHead>
                     <TableHead className="text-right">Variação (24h)</TableHead>
+                    <TableHead className="text-right w-16"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {assets.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                      <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                         Você ainda não gerou nenhum ativo. Clique no botão acima para começar!
                       </TableCell>
                     </TableRow>
@@ -663,6 +747,19 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
                               {asset.price_change_24h > 0 ? '+' : ''}{asset.price_change_24h.toFixed(2)}%
                             </div>
                           </TableCell>
+                          <TableCell className="text-right">
+                            <button
+                              onClick={() => handleDeleteClick(asset)}
+                              title={soldTokens > 0 ? "Ativo não pode ser excluído" : "Excluir ativo"}
+                              className={`p-2 rounded-md transition-colors ${
+                                soldTokens > 0
+                                  ? 'text-muted-foreground/30 hover:bg-muted cursor-pointer'
+                                  : 'text-red-500 hover:bg-red-500/10 cursor-pointer'
+                              }`}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </TableCell>
                         </TableRow>
                       );
                     })
@@ -674,7 +771,7 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
 
           {/* MODAL: GERAR NOVO ATIVO */}
           <Dialog open={isAssetModalOpen} onOpenChange={setIsAssetModalOpen}>
-            <DialogContent className="max-w-xl">
+            <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto scrollbar-thin">
               <DialogHeader>
                 <DialogTitle>Gerar Novo Ativo</DialogTitle>
                 <DialogDescription>Crie um novo produto, NFT ou cota de patrocínio para tokenizar.</DialogDescription>
@@ -709,7 +806,7 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
                   </div>
                   <div>
                     <Label htmlFor="assetDesc">Descrição do Ativo *</Label>
-                    <Textarea id="assetDesc" value={newAssetDescription} onChange={(e) => setNewAssetDescription(e.target.value)} placeholder="Detalhes do que representa este ativo..." rows={3} />
+                    <Textarea id="assetDesc" value={newAssetDescription} onChange={(e) => setNewAssetDescription(e.target.value)} placeholder="Detalhes do que representa este ativo..." rows={3} className="scrollbar-thin" />
                   </div>
                   <div>
                     <Label htmlFor="assetYoutube">Link do YouTube (Opcional)</Label>
@@ -780,7 +877,133 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setIsAssetModalOpen(false)}>Cancelar</Button>
-                <Button onClick={createNewAsset}>Gerar Ativo</Button>
+                <Button onClick={handleRequestAssetConfirm}>Gerar Ativo</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          {/* Dialog de Confirmação: Gerar Ativo */}
+          <Dialog open={isAssetConfirmOpen} onOpenChange={(open) => !open && setIsAssetConfirmOpen(false)}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Coins className="w-5 h-5 text-primary" />
+                  Confirmar Geração de Ativo
+                </DialogTitle>
+                <DialogDescription className="pt-2 text-base">
+                  Você está prestes a tokenizar um novo ativo. Verifique os dados antes de confirmar.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="bg-muted/50 p-4 rounded-lg my-2 border space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Título</span>
+                  <span className="font-medium text-foreground">{newAssetTitle}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Quantidade de tokens</span>
+                  <span className="font-medium text-foreground">{newAssetTokens.toLocaleString('pt-BR')}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Preço por token</span>
+                  <span className="font-medium text-foreground">
+                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(newAssetPrice)}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm border-t pt-2 mt-1">
+                  <span className="text-muted-foreground">Valor total (market cap)</span>
+                  <span className="font-semibold text-foreground">
+                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(newAssetTokens * newAssetPrice)}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Você recebe por venda</span>
+                  <span className="font-medium text-green-600 dark:text-green-500">
+                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(newAssetPrice * 0.95)}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Royalties no mercado secundário</span>
+                  <span className={`font-medium ${newAssetRoyalties ? 'text-primary' : 'text-muted-foreground'}`}>
+                    {newAssetRoyalties ? 'Ativado (2%)' : 'Desativado'}
+                  </span>
+                </div>
+              </div>
+              <DialogFooter className="gap-2 sm:gap-0 mt-2">
+                <Button variant="outline" onClick={() => setIsAssetConfirmOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button className="bg-green-600 hover:bg-green-700 text-white" onClick={createNewAsset}>
+                  <Coins className="w-4 h-4 mr-2" />
+                  Confirmar e Gerar
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          {/* Dialog de Confirmação: Excluir Ativo */}
+          <Dialog open={isDeleteConfirmOpen} onOpenChange={(open) => { if (!isDeletingAsset) { setIsDeleteConfirmOpen(open); if (!open) setAssetToDelete(null); } }}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-red-500">
+                  <Trash2 className="w-5 h-5" />
+                  Excluir Ativo
+                </DialogTitle>
+                <DialogDescription className="pt-2 text-base">
+                  Esta ação é permanente e não poderá ser desfeita. Confirme os dados abaixo antes de prosseguir.
+                </DialogDescription>
+              </DialogHeader>
+              {assetToDelete && (
+                <div className="bg-muted/50 p-4 rounded-lg my-2 border space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Ativo</span>
+                    <span className="font-medium text-foreground">{assetToDelete.title}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Tokens totais</span>
+                    <span className="font-medium text-foreground">{assetToDelete.total_tokens.toLocaleString('pt-BR')}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Tokens vendidos</span>
+                    <span className="font-medium text-green-600">0 (nenhuma venda)</span>
+                  </div>
+                </div>
+              )}
+              <DialogFooter className="gap-2 sm:gap-0 mt-2">
+                <Button variant="outline" onClick={() => { setIsDeleteConfirmOpen(false); setAssetToDelete(null); }} disabled={isDeletingAsset}>
+                  Cancelar
+                </Button>
+                <Button className="bg-red-600 hover:bg-red-700 text-white" onClick={deleteAsset} disabled={isDeletingAsset}>
+                  {isDeletingAsset ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Trash2 className="w-4 h-4 mr-2" />}
+                  {isDeletingAsset ? 'Excluindo...' : 'Confirmar Exclusão'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          {/* Dialog: Exclusão Bloqueada */}
+          <Dialog open={isDeleteBlockedOpen} onOpenChange={(open) => { setIsDeleteBlockedOpen(open); if (!open) setAssetToDelete(null); }}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-muted-foreground">
+                  <AlertTriangle className="w-5 h-5 text-amber-500" />
+                  Exclusão não permitida
+                </DialogTitle>
+                <DialogDescription className="pt-2 text-base">
+                  Este ativo não pode ser excluído.
+                </DialogDescription>
+              </DialogHeader>
+              {assetToDelete && (
+                <div className="bg-muted/50 p-4 rounded-lg my-2 border space-y-3">
+                  <p className="text-sm font-medium text-foreground">{assetToDelete.title}</p>
+                  <p className="text-sm text-muted-foreground">
+                    Este ativo já foi comercializado — <strong className="text-foreground">{(assetToDelete.total_tokens - assetToDelete.available_tokens).toLocaleString('pt-BR')} token(s)</strong> foram vendidos. Uma vez que qualquer patrocinador adquira tokens de um ativo, ele não pode mais ser removido da plataforma para garantir a integridade das transações.
+                  </p>
+                </div>
+              )}
+              <DialogFooter>
+                <Button onClick={() => { setIsDeleteBlockedOpen(false); setAssetToDelete(null); }}>
+                  Entendido
+                </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
@@ -828,10 +1051,7 @@ export function SponsoredPanel({ userId, profile }: SponsoredPanelProps) {
                 {renderAvatarUploadArea()}
                 {renderGalleryUploadArea()}
 
-                <div>
-                  <Label htmlFor="editAchievements">Conquistas (uma por linha)</Label>
-                  <Textarea id="editAchievements" value={achievements} onChange={(e) => setAchievements(e.target.value)} rows={3} />
-                </div>
+                {renderAchievementsInput()}
 
                 <div className="border-t pt-4">
                   <h3 className="font-semibold mb-3">Redes Sociais</h3>

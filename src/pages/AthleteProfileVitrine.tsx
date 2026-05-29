@@ -29,7 +29,8 @@ interface Asset {
 
 const getYouTubeEmbedUrl = (url: string) => {
     if (!url) return null;
-    const regExp = /(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/))([\w-]{11})/;
+    // Regex melhorado: Captura web, mobile (m.), shorts, live e links curtos (youtu.be)
+    const regExp = /(?:https?:\/\/)?(?:www\.|m\.)?(?:youtu\.be\/|youtube\.com\/(?:shorts\/|embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/;
     const match = url.match(regExp);
     return match ? `https://www.youtube.com/embed/${match[1]}` : null;
 };
@@ -285,20 +286,30 @@ const AthleteProfileVitrine = () => {
                                 <Youtube className="w-6 h-6 mr-2 text-primary" />
                                 Vídeo de Destaque
                             </h2>
-                            <Card className="overflow-hidden shadow-sm border-border">
-                                <CardContent className="p-0">
-                                    <div className="aspect-video w-full bg-muted">
-                                        <iframe
-                                            width="100%"
-                                            height="100%"
-                                            src={getYouTubeEmbedUrl((athlete as any).featuredVideo)!}
-                                            title="Vídeo do Atleta"
-                                            frameBorder="0"
-                                            allowFullScreen
-                                        ></iframe>
-                                    </div>
-                                </CardContent>
-                            </Card>
+
+                            {(() => {
+                                const videoUrl = (athlete as any).featuredVideo;
+                                const isShort = videoUrl.includes('/shorts/');
+
+                                return (
+                                    <Card className={`overflow-hidden shadow-sm border-border ${isShort ? 'max-w-[350px] mx-auto' : 'w-full'}`}>
+                                        <CardContent className="p-0">
+                                            {/* Se for Short, usa proporção 9:16 (vertical). Se for normal, usa 16:9 (aspect-video) */}
+                                            <div className={`w-full bg-black flex items-center justify-center ${isShort ? 'aspect-[9/16]' : 'aspect-video'}`}>
+                                                <iframe
+                                                    width="100%"
+                                                    height="100%"
+                                                    src={getYouTubeEmbedUrl(videoUrl)!}
+                                                    title="Vídeo do Atleta"
+                                                    frameBorder="0"
+                                                    allowFullScreen
+                                                    className="w-full h-full"
+                                                ></iframe>
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+                                );
+                            })()}
                         </div>
                     )}
 

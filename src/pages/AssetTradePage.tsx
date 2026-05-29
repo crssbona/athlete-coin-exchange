@@ -14,9 +14,10 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RechartsToolti
 
 const getYouTubeEmbedUrl = (url: string) => {
     if (!url) return null;
-    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
+    // Captura links normais, mobile (m.), shorts, transmissões ao vivo e links encurtados (youtu.be)
+    const regExp = /(?:https?:\/\/)?(?:www\.|m\.)?(?:youtu\.be\/|youtube\.com\/(?:shorts\/|embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/;
     const match = url.match(regExp);
-    return (match && match[2].length === 11) ? `https://www.youtube.com/embed/${match[2]}` : null;
+    return match ? `https://www.youtube.com/embed/${match[1]}` : null;
 };
 
 interface Order {
@@ -517,15 +518,38 @@ const AssetTradePage = () => {
                                 </CardContent>
                             </Card>
 
-                            {asset.youtubeLink && getYouTubeEmbedUrl(asset.youtubeLink) && (
-                                <Card>
-                                    <CardHeader><CardTitle>Vídeo de Apresentação</CardTitle></CardHeader>
-                                    <CardContent>
-                                        <div className="aspect-video rounded-lg overflow-hidden border shadow-sm">
-                                            <iframe width="100%" height="100%" src={getYouTubeEmbedUrl(asset.youtubeLink)!} title="Apresentação" frameBorder="0" allowFullScreen></iframe>
-                                        </div>
-                                    </CardContent>
-                                </Card>
+                            {/* Certifique-se de ajustar a variável (ex: asset.youtube_link ou asset.video_url) conforme o seu estado atual */}
+                            {asset?.youtubeLink && getYouTubeEmbedUrl(asset.youtubeLink) && (
+                                <div className="mt-6">
+                                    <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary"><path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33A2.78 2.78 0 0 0 3.4 19c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2 29 29 0 0 0 .46-5.25 29 29 0 0 0-.46-5.33z" /><polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02" /></svg>
+                                        Vídeo do Ativo
+                                    </h2>
+
+                                    {(() => {
+                                        const videoUrl = asset.youtubeLink;
+                                        const isShort = videoUrl.includes('/shorts/');
+
+                                        return (
+                                            <Card className={`overflow-hidden shadow-sm border-border ${isShort ? 'max-w-[320px] mx-auto' : 'w-full'}`}>
+                                                <CardContent className="p-0">
+                                                    {/* Se for Short, renderiza em 9:16 vertical; se for normal, mantém o 16:9 tradicional */}
+                                                    <div className={`w-full bg-black flex items-center justify-center ${isShort ? 'aspect-[9/16]' : 'aspect-video'}`}>
+                                                        <iframe
+                                                            width="100%"
+                                                            height="100%"
+                                                            src={getYouTubeEmbedUrl(videoUrl)!}
+                                                            title="Vídeo do Ativo"
+                                                            frameBorder="0"
+                                                            allowFullScreen
+                                                            className="w-full h-full"
+                                                        ></iframe>
+                                                    </div>
+                                                </CardContent>
+                                            </Card>
+                                        );
+                                    })()}
+                                </div>
                             )}
                         </div>
 
