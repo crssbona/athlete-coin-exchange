@@ -5,6 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "@/components/theme-provider";
+import { InviteCodesPopup } from "@/components/InviteCodesPopup";
 import Index from "./pages/Index";
 import Marketplace from "./pages/Marketplace";
 import AthletePage from "./pages/AthletePage";
@@ -34,6 +35,7 @@ function App() {
           <Toaster />
           <Sonner />
           <BrowserRouter>
+            <InviteCodesPopup />
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/marketplace" element={<Marketplace />} />
