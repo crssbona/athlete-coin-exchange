@@ -95,7 +95,7 @@ const Vitrine = () => {
                     <div className="mb-8">
                         <div className="flex items-center gap-2 mb-4">
                             <Users className="w-8 h-8 text-primary" />
-                            <h1 className="text-4xl font-bold">Vitrine de Atletas</h1>
+                            <h1 className="text-4xl font-bold">Atletas</h1>
                         </div>
                         <p className="text-lg text-muted-foreground">
                             Conheça as histórias e perfis de todos os atletas apoiados na plataforma.

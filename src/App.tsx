@@ -20,6 +20,7 @@ import WalletPage from "./pages/Wallet";
 import Vitrine from "./pages/Vitrine";
 import AthleteProfileVitrine from "./pages/AthleteProfileVitrine";
 import AssetTradePage from "./pages/AssetTradePage";
+import Assets from "./pages/Assets";
 import Settings from "./pages/Settings";
 import AdminDashboard from "./pages/AdminDashboard";
 import Privacy from "./pages/Privacy";
@@ -49,6 +50,7 @@ function App() {
               <Route path="/wallet" element={<WalletPage />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/vitrine" element={<Vitrine />} />
+              <Route path="/assets" element={<Assets />} />
               <Route path="/vitrine-atleta/:id" element={<AthleteProfileVitrine />} />
               <Route path="/ativo/:assetId" element={<AssetTradePage />} />
               <Route path="/admin-secret-access" element={<AdminDashboard />} />

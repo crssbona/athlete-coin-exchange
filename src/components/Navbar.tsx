@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { User, Wallet, Settings, LogOut, Eye, UserCircle, Menu, ChevronDown, ChevronUp, Sun, Moon } from "lucide-react";
+import { User, Wallet, Settings, LogOut, Eye, UserCircle, Menu, ChevronDown, ChevronUp, Sun, Moon, Layers } from "lucide-react";
 import { Button } from "./ui/button";
 import { useAuth } from "@/hooks/useAuth";
 import { useTheme } from "@/components/theme-provider";
@@ -112,7 +112,10 @@ export const Navbar = () => {
         {/* NAVEGAÇÃO DESKTOP */}
         <div className="hidden md:flex items-center gap-8">
           <Link to="/vitrine" className="text-sm font-medium hover:text-primary transition-colors">
-            Vitrine
+            Atletas
+          </Link>
+          <Link to="/assets" className="text-sm font-medium hover:text-primary transition-colors">
+            Ativos
           </Link>
           <Link to="/how-it-works" className="text-sm font-medium hover:text-primary transition-colors">
             Como Funciona
@@ -227,7 +230,8 @@ export const Navbar = () => {
                 <div className="h-px bg-border w-full my-1" />
 
                 <div className="flex flex-col gap-5">
-                  <Link to="/vitrine" onClick={() => setIsMobileMenuOpen(false)} className="text-lg font-medium hover:text-primary transition-colors">Vitrine</Link>
+                  <Link to="/vitrine" onClick={() => setIsMobileMenuOpen(false)} className="text-lg font-medium hover:text-primary transition-colors">Atletas</Link>
+                  <Link to="/assets" onClick={() => setIsMobileMenuOpen(false)} className="text-lg font-medium hover:text-primary transition-colors">Ativos</Link>
                   <Link to="/how-it-works" onClick={() => setIsMobileMenuOpen(false)} className="text-lg font-medium hover:text-primary transition-colors">Como Funciona</Link>
                 </div>
               </div>
