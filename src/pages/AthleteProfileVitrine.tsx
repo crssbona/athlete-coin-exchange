@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
 import { Navbar } from "@/components/Navbar";
 import { supabase } from "@/lib/supabase";
@@ -15,17 +15,164 @@ import {
     ChevronLeft, ChevronRight
 } from "lucide-react";
 import { CosmicAvatar } from "@/components/CosmicAvatar";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface Asset {
     id: string;
     title: string;
     description: string;
     photo_url: string;
+    youtube_link: string;
     total_tokens: number;
     available_tokens: number;
     price_per_token: number;
     price_change_24h: number;
 }
+
+interface AssetCardVitrineProps {
+    asset: Asset;
+    isWatchlisted: boolean;
+    onToggleWatchlist: (id: string) => void;
+}
+
+const AssetCardVitrine = ({ asset, isWatchlisted, onToggleWatchlist }: AssetCardVitrineProps) => {
+    const isMobile = useIsMobile();
+    const [showVideo, setShowVideo] = useState(false);
+    const [videoLoaded, setVideoLoaded] = useState(false);
+    const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    const embedUrl = (() => {
+        if (!asset.youtube_link) return null;
+        const regExp = /(?:https?:\/\/)?(?:www\.|m\.)?(?:youtu\.be\/|youtube\.com\/(?:shorts\/|embed\/|v\/|watch\?v=|watch\?.+&v=))([\w-]{11})/;
+        const match = asset.youtube_link.match(regExp);
+        return match ? `https://www.youtube.com/embed/${match[1]}?autoplay=1&mute=1&loop=1&playlist=${match[1]}&controls=0&modestbranding=1&rel=0` : null;
+    })();
+
+    const handleMouseEnter = () => {
+        if (isMobile || !embedUrl) return;
+        hoverTimer.current = setTimeout(() => setShowVideo(true), 600);
+    };
+
+    const handleMouseLeave = () => {
+        if (isMobile) return;
+        if (hoverTimer.current) clearTimeout(hoverTimer.current);
+        setShowVideo(false);
+        setVideoLoaded(false);
+    };
+
+    const handleImageClick = () => {
+        if (!isMobile || !embedUrl) return;
+        setShowVideo(true);
+    };
+
+    const handleOverlayClick = () => {
+        setShowVideo(false);
+        setVideoLoaded(false);
+    };
+
+    const isPositive = asset.price_change_24h > 0;
+    const isNegative = asset.price_change_24h < 0;
+    const total = asset.total_tokens || 1;
+    const sold = total - asset.available_tokens;
+    const progressPercentage = (sold / total) * 100;
+
+    return (
+        <>
+            {isMobile && showVideo && (
+                <div className="fixed inset-0 z-40" onClick={handleOverlayClick} />
+            )}
+            <Card className="group overflow-hidden border-border hover:border-primary/50 transition-all duration-300 flex flex-col bg-card">
+                <div
+                    className={`relative aspect-video overflow-hidden bg-muted ${isMobile && showVideo ? "z-50" : ""}`}
+                    onMouseEnter={handleMouseEnter}
+                    onMouseLeave={handleMouseLeave}
+                    onClick={handleImageClick}
+                    style={{ cursor: isMobile && embedUrl && !showVideo ? "pointer" : "default" }}
+                >
+                    {showVideo && embedUrl ? (
+                        <>
+                            {!videoLoaded && (
+                                <div className="absolute inset-0 flex flex-col items-center justify-center bg-black z-10 gap-3">
+                                    <svg className="w-10 h-10 animate-spin text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                        <circle className="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+                                        <path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                    </svg>
+                                    <span className="text-white/70 text-xs font-medium tracking-wide">A carregar vídeo...</span>
+                                </div>
+                            )}
+                            <iframe
+                                src={embedUrl}
+                                className="w-full h-full"
+                                allow="autoplay; encrypted-media"
+                                allowFullScreen={false}
+                                title={asset.title}
+                                onLoad={() => setVideoLoaded(true)}
+                            />
+                        </>
+                    ) : asset.photo_url ? (
+                        <img src={asset.photo_url} alt={asset.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                    ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                            <ImageIcon className="w-10 h-10 text-muted-foreground/30" />
+                        </div>
+                    )}
+                    <div className="absolute top-2 right-2 bg-background/80 backdrop-blur px-2 py-1 rounded text-xs font-semibold border">Ativo Digital</div>
+                    {embedUrl && !showVideo && (
+                        <div className="absolute bottom-2 left-2 bg-background/70 backdrop-blur px-2 py-1 rounded text-[10px] text-muted-foreground border border-border/50 flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-red-500 inline-block" />
+                            {isMobile ? "Clique na imagem para ver o vídeo" : "Passe o mouse para ver o vídeo"}
+                        </div>
+                    )}
+                </div>
+
+                <CardContent className="p-5 flex-grow space-y-4">
+                    <div>
+                        <h3 className="font-bold text-lg line-clamp-1" title={asset.title}>{asset.title}</h3>
+                        <p className="text-sm text-muted-foreground line-clamp-2 mt-1" title={asset.description}>{asset.description}</p>
+                    </div>
+
+                    <div className="flex justify-between items-end pt-2">
+                        <div>
+                            <p className="text-xs text-muted-foreground mb-1">Preço do Token</p>
+                            <p className="text-2xl font-bold text-primary">R$ {asset.price_per_token.toFixed(2)}</p>
+                        </div>
+                        <div className={`flex flex-col items-end ${isPositive ? 'text-green-500' : isNegative ? 'text-red-500' : 'text-muted-foreground'}`}>
+                            <div className="flex items-center gap-1 text-sm font-semibold">
+                                {isPositive ? <TrendingUp className="w-4 h-4" /> : isNegative ? <TrendingDown className="w-4 h-4" /> : null}
+                                {isPositive ? '+' : ''}{asset.price_change_24h.toFixed(2)}%
+                            </div>
+                            <span className="text-[10px] opacity-70">24h</span>
+                        </div>
+                    </div>
+
+                    <div className="space-y-1.5 pt-4 border-t border-border/50">
+                        <div className="flex justify-between text-xs">
+                            <span className="text-muted-foreground font-medium">Progresso de Venda</span>
+                            <span className="font-bold">{progressPercentage.toFixed(1)}%</span>
+                        </div>
+                        <div className="h-2 w-full bg-secondary rounded-full overflow-hidden">
+                            <div className="h-full bg-primary transition-all duration-500" style={{ width: `${progressPercentage}%` }} />
+                        </div>
+                        <div className="flex justify-between text-xs text-muted-foreground pt-1">
+                            <span>Restam: <strong>{asset.available_tokens}</strong></span>
+                            <span>Total: <strong>{asset.total_tokens}</strong></span>
+                        </div>
+                    </div>
+                </CardContent>
+
+                <div className="p-5 pt-0 mt-auto space-y-2">
+                    <Link to={`/ativo/${asset.id}`} className="w-full block">
+                        <Button className="w-full" variant="default">Ver ativo</Button>
+                    </Link>
+                    <Button className="w-full" variant="outline" onClick={() => onToggleWatchlist(asset.id)}>
+                        <Heart className={`w-4 h-4 mr-2 ${isWatchlisted ? 'fill-red-500 text-red-500' : ''}`} />
+                        {isWatchlisted ? 'Remover da Watchlist' : 'Adicionar à Watchlist'}
+                    </Button>
+                </div>
+            </Card>
+        </>
+    );
+};
 
 const getYouTubeEmbedUrl = (url: string) => {
     if (!url) return null;
@@ -331,74 +478,14 @@ const AthleteProfileVitrine = () => {
                             </Card>
                         ) : (
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                {assets.map((asset) => {
-                                    const isPositive = asset.price_change_24h > 0;
-                                    const isNegative = asset.price_change_24h < 0;
-                                    const total = asset.total_tokens || 1;
-                                    const sold = total - asset.available_tokens;
-                                    const progressPercentage = (sold / total) * 100;
-
-                                    return (
-                                        <Card key={asset.id} className="group overflow-hidden border-border hover:border-primary/50 transition-all duration-300 flex flex-col bg-card">
-                                            <div className="relative aspect-video overflow-hidden bg-muted">
-                                                {asset.photo_url ? (
-                                                    <img src={asset.photo_url} alt={asset.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
-                                                ) : (
-                                                    <div className="w-full h-full flex items-center justify-center">
-                                                        <ImageIcon className="w-10 h-10 text-muted-foreground/30" />
-                                                    </div>
-                                                )}
-                                                <div className="absolute top-2 right-2 bg-background/80 backdrop-blur px-2 py-1 rounded text-xs font-semibold border">Ativo Digital</div>
-                                            </div>
-
-                                            <CardContent className="p-5 flex-grow space-y-4">
-                                                <div>
-                                                    <h3 className="font-bold text-lg line-clamp-1" title={asset.title}>{asset.title}</h3>
-                                                    <p className="text-sm text-muted-foreground line-clamp-2 mt-1" title={asset.description}>{asset.description}</p>
-                                                </div>
-
-                                                <div className="flex justify-between items-end pt-2">
-                                                    <div>
-                                                        <p className="text-xs text-muted-foreground mb-1">Preço do Token</p>
-                                                        <p className="text-2xl font-bold text-primary">R$ {asset.price_per_token.toFixed(2)}</p>
-                                                    </div>
-
-                                                    <div className={`flex flex-col items-end ${isPositive ? 'text-green-500' : isNegative ? 'text-red-500' : 'text-muted-foreground'}`}>
-                                                        <div className="flex items-center gap-1 text-sm font-semibold">
-                                                            {isPositive ? <TrendingUp className="w-4 h-4" /> : isNegative ? <TrendingDown className="w-4 h-4" /> : null}
-                                                            {isPositive ? '+' : ''}{asset.price_change_24h.toFixed(2)}%
-                                                        </div>
-                                                        <span className="text-[10px] opacity-70">24h</span>
-                                                    </div>
-                                                </div>
-
-                                                <div className="space-y-1.5 pt-4 border-t border-border/50">
-                                                    <div className="flex justify-between text-xs">
-                                                        <span className="text-muted-foreground font-medium">Progresso de Venda</span>
-                                                        <span className="font-bold">{progressPercentage.toFixed(1)}%</span>
-                                                    </div>
-                                                    <div className="h-2 w-full bg-secondary rounded-full overflow-hidden">
-                                                        <div className="h-full bg-primary transition-all duration-500" style={{ width: `${progressPercentage}%` }} />
-                                                    </div>
-                                                    <div className="flex justify-between text-xs text-muted-foreground pt-1">
-                                                        <span>Restam: <strong>{asset.available_tokens}</strong></span>
-                                                        <span>Total: <strong>{asset.total_tokens}</strong></span>
-                                                    </div>
-                                                </div>
-                                            </CardContent>
-
-                                            <div className="p-5 pt-0 mt-auto space-y-2">
-                                                <Link to={`/ativo/${asset.id}`} className="w-full block">
-                                                    <Button className="w-full" variant="default">Ver ativo</Button>
-                                                </Link>
-                                                <Button className="w-full" variant="outline" onClick={() => toggleWatchlist(asset.id)}>
-                                                    <Heart className={`w-4 h-4 mr-2 ${watchlist.has(asset.id) ? 'fill-red-500 text-red-500' : ''}`} />
-                                                    {watchlist.has(asset.id) ? 'Remover da Watchlist' : 'Adicionar à Watchlist'}
-                                                </Button>
-                                            </div>
-                                        </Card>
-                                    );
-                                })}
+                                {assets.map((asset) => (
+                                    <AssetCardVitrine
+                                        key={asset.id}
+                                        asset={asset}
+                                        isWatchlisted={watchlist.has(asset.id)}
+                                        onToggleWatchlist={toggleWatchlist}
+                                    />
+                                ))}
                             </div>
                         )}
                     </div>
