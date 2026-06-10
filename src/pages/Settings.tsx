@@ -7,36 +7,53 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Copy, Settings as SettingsIcon, Share2, Loader2, Ticket } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Copy, Settings as SettingsIcon, Share2, Loader2, Ticket, Bell } from "lucide-react";
 import { toast } from "sonner";
 
 export default function Settings() {
     const { user } = useAuth();
     const [invites, setInvites] = useState<any[]>([]);
     const [loadingInvites, setLoadingInvites] = useState(true);
+    
+    // Novo estado para controlar as notificações
+    const [emailNotifications, setEmailNotifications] = useState(true);
 
-    // 👇 BUSCA OS CONVITES DO UTILIZADOR NA BASE DE DADOS
     useEffect(() => {
         if (!user?.id) return;
 
-        const fetchInvites = async () => {
+        const fetchData = async () => {
             try {
-                const { data, error } = await supabase
+                // Busca os convites
+                const { data: inviteData, error: inviteError } = await supabase
                     .from('invite_codes')
                     .select('*')
                     .eq('owner_id', user.id)
                     .order('created_at', { ascending: true });
 
-                if (error) throw error;
-                if (data) setInvites(data);
+                if (inviteError) throw inviteError;
+                if (inviteData) setInvites(inviteData);
+
+                // Busca as preferências de notificação do perfil
+                const { data: profileData, error: profileError } = await supabase
+                    .from('profiles')
+                    .select('email_notifications')
+                    .eq('id', user.id)
+                    .single();
+
+                if (profileError) throw profileError;
+                if (profileData && profileData.email_notifications !== null) {
+                    setEmailNotifications(profileData.email_notifications);
+                }
+
             } catch (error) {
-                console.error("Erro ao procurar convites:", error);
+                console.error("Erro ao carregar dados:", error);
             } finally {
                 setLoadingInvites(false);
             }
         };
 
-        fetchInvites();
+        fetchData();
     }, [user?.id]);
 
     const handleCopyId = () => {
@@ -51,6 +68,26 @@ export default function Settings() {
         toast.success("Código de convite copiado!", {
             description: "Envie este código para o seu amigo se registar."
         });
+    };
+
+    // Função que guarda a preferência no banco de dados quando o usuário clica
+    const handleToggleNotifications = async (checked: boolean) => {
+        setEmailNotifications(checked); // Atualiza na tela na mesma hora
+        
+        if (!user?.id) return;
+
+        const { error } = await supabase
+            .from('profiles')
+            .update({ email_notifications: checked })
+            .eq('id', user.id);
+
+        if (error) {
+            console.error(error);
+            toast.error("Erro ao guardar preferência.");
+            setEmailNotifications(!checked); // Se der erro no banco, reverte o botão
+        } else {
+            toast.success(checked ? "Notificações ativadas!" : "Notificações silenciadas.");
+        }
     };
 
     return (
@@ -69,7 +106,8 @@ export default function Settings() {
                 </div>
 
                 <div className="grid gap-6">
-                    {/* 👇 NOVO: CARTÃO DE CONVITES VIP */}
+
+                    {/* Cartão de Convites VIP */}
                     <Card className="border-primary/20 shadow-sm">
                         <CardHeader className="bg-muted/30 border-b pb-4">
                             <CardTitle className="flex items-center gap-2 text-primary">
@@ -131,7 +169,34 @@ export default function Settings() {
                         </CardContent>
                     </Card>
 
-                    {/* Cartão Original de ID do Utilizador */}
+                    {/* 👇 NOVO: CARTÃO DE NOTIFICAÇÕES */}
+                    <Card className="border-primary/20 shadow-sm">
+                        <CardHeader className="bg-muted/30 border-b pb-4">
+                            <CardTitle className="flex items-center gap-2 text-primary">
+                                <Bell className="w-5 h-5" /> Notificações
+                            </CardTitle>
+                            <CardDescription>
+                                Controle quais os alertas que quer receber por e-mail.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="pt-6">
+                            <div className="flex items-center justify-between p-4 border rounded-xl bg-card hover:border-primary/30 transition-colors">
+                                <div className="space-y-0.5">
+                                    <Label className="text-base cursor-pointer" htmlFor="toggle-emails">Alertas de Trade</Label>
+                                    <p className="text-sm text-muted-foreground max-w-[90%]">
+                                        Receber e-mails automáticos quando vender ou comprar tokens na plataforma.
+                                    </p>
+                                </div>
+                                <Switch 
+                                    id="toggle-emails"
+                                    checked={emailNotifications}
+                                    onCheckedChange={handleToggleNotifications}
+                                />
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* Cartão de ID do Utilizador */}
                     <Card>
                         <CardHeader>
                             <CardTitle>Informações Técnicas</CardTitle>
