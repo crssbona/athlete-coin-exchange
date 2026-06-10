@@ -249,6 +249,7 @@ const Auth = () => {
     }
 
     toast.success("Falta pouco! 🎉 Enviamos um link de confirmação para o seu e-mail. Clique nele para acessar sua conta.");
+    navigate("/");
   };
 
   const handleJoinWaitlist = async (e: React.FormEvent) => {
