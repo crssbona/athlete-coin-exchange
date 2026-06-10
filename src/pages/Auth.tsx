@@ -270,7 +270,7 @@ const Auth = () => {
       }
 
       toast.success("Você entrou para a lista de espera!", {
-        description: "Avisaremos por e-mail e WhatsApp assim que liberarmos sua conta."
+        description: "Você receberá um código de convite por e-mail assim que liberarmos sua conta."
       });
       setIsWaitlistOpen(false);
       setWaitlistData({ name: "", email: "", phone: "" });

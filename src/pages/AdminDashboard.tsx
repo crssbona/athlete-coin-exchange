@@ -142,16 +142,35 @@ export default function AdminDashboard() {
         setProcessing(true);
         try {
             if (!user?.id) throw new Error("Admin não autenticado");
+            
+            // 1. Gera o código e insere no banco
             const code = "OPA-" + Math.random().toString(36).substring(2, 8).toUpperCase();
             const { error: inviteError } = await supabase.from('invite_codes').insert({ code: code, owner_id: user.id, status: 'available' });
             if (inviteError) throw inviteError;
+            
             const { error: waitlistError } = await supabase.from('waitlist').update({ status: 'approved', invite_code: code }).eq('id', entry.id);
             if (waitlistError) throw waitlistError;
-            navigator.clipboard.writeText(code);
-            toast.success(`Usuário aprovado!`, { description: `O código de convite é ${code} (Copiado para a área de transferência).`, duration: 10000 });
+            
+            // 2. Chama a Edge Function para enviar o e-mail pela Brevo
+            const { error: emailError } = await supabase.functions.invoke('send-invite-email', {
+                body: { 
+                    name: entry.name, 
+                    email: entry.email, 
+                    inviteCode: code 
+                }
+            });
+
+            if (emailError) {
+                console.error("Erro na Edge Function:", emailError);
+                toast.success(`Usuário aprovado, mas falha ao enviar o e-mail.`, { description: `Envie manualmente o código: ${code}` });
+            } else {
+                toast.success(`Usuário aprovado e e-mail enviado com sucesso!`, { description: `O código gerado foi ${code}` });
+            }
+            
             loadAdminData();
         } catch (error: any) {
-            console.error(error); toast.error("Erro ao aprovar usuário.");
+            console.error(error); 
+            toast.error("Erro ao aprovar usuário.");
         } finally {
             setProcessing(false);
         }
