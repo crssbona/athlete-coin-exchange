@@ -153,7 +153,7 @@ const Auth = () => {
       if (error.message.includes("Invalid login credentials")) {
         toast.error("Email ou senha incorretos");
       } else if (error.message.includes("Email not confirmed")) {
-        toast.error("Por favor, confirme seu email antes de fazer login");
+        toast.error("Você precisa confirmar seu e-mail antes de fazer o login. Dê uma olhada na sua caixa de entrada ou spam.");
       } else {
         toast.error("Erro ao fazer login. Tente novamente.");
       }
@@ -244,11 +244,11 @@ const Auth = () => {
         });
 
       if (profileError) {
-        toast.error("Conta criada, mas houve um erro ao salvar seus dados. Entre em contato com o suporte.");
+        console.error("Erro ao inserir perfil (Provável bloqueio de RLS por falta de confirmação de email):", profileError);
       }
     }
 
-    toast.success("Conta criada com sucesso! Bem-vindo ao Opatrocinador.");
+    toast.success("Falta pouco! 🎉 Enviamos um link de confirmação para o seu e-mail. Clique nele para acessar sua conta.");
   };
 
   const handleJoinWaitlist = async (e: React.FormEvent) => {

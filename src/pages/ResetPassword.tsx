@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { TrendingUp } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/lib/supabase";
+import logoInferior from "@/assets/logo-escrita-inferior.png";
 
 const ResetPassword = () => {
   const [isLoading, setIsLoading] = useState(false);
@@ -84,10 +85,7 @@ const ResetPassword = () => {
       <div className="w-full max-w-md relative z-10">
         {/* Logo/Header */}
         <Link to="/" className="flex items-center justify-center gap-2 mb-8">
-          <div className="w-10 h-10 rounded-lg gradient-primary glow-primary flex items-center justify-center">
-            <TrendingUp className="w-6 h-6 text-primary-foreground" />
-          </div>
-          <span className="text-2xl font-bold">Opatrocinador</span>
+          <img src={logoInferior} alt="Logo Opatrocinador" height={250} width={250} />
         </Link>
 
         <Card>
