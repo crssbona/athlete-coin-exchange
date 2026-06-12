@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -65,11 +65,58 @@ export function SponsorPanel({ userId }: SponsorPanelProps) {
   const [cancellingId, setCancellingId] = useState<string | null>(null);
   const [cancellingSaleId, setCancellingSaleId] = useState<string | null>(null);
 
+  // Mantém uma referência sempre atualizada de loadAssetsData para uso em callbacks realtime
+  const loadAssetsDataRef = useRef<() => void>(() => {});
+
   useEffect(() => {
     loadTokens();
     loadPendingPurchases();
     loadPendingSales();
     loadTransactions();
+  }, [userId]);
+
+  // INSCRIÇÕES REALTIME: atualiza a carteira automaticamente quando algo muda no servidor
+  useEffect(() => {
+    if (!userId) return;
+
+    const channelTokens = supabase
+      .channel(`public:user_asset_tokens:${userId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'user_asset_tokens', filter: `user_id=eq.${userId}` }, () => {
+        loadTokens();
+      }).subscribe();
+
+    const channelPendingPurchases = supabase
+      .channel(`public:pending_asset_purchases:owner:${userId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'pending_asset_purchases', filter: `user_id=eq.${userId}` }, () => {
+        loadPendingPurchases();
+      }).subscribe();
+
+    const channelPendingSales = supabase
+      .channel(`public:pending_asset_sales:owner:${userId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'pending_asset_sales', filter: `user_id=eq.${userId}` }, () => {
+        loadPendingSales();
+      }).subscribe();
+
+    const channelTransactions = supabase
+      .channel(`public:transactions:owner:${userId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions', filter: `user_id=eq.${userId}` }, () => {
+        loadTransactions();
+      }).subscribe();
+
+    // Preço dos ativos mudou (ex: cruzamento no livro de ofertas) -> atualiza "Valor Atual"
+    const channelAssets = supabase
+      .channel(`public:athlete_assets:sponsor-panel:${userId}`)
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'athlete_assets' }, () => {
+        loadAssetsDataRef.current();
+      }).subscribe();
+
+    return () => {
+      supabase.removeChannel(channelTokens);
+      supabase.removeChannel(channelPendingPurchases);
+      supabase.removeChannel(channelPendingSales);
+      supabase.removeChannel(channelTransactions);
+      supabase.removeChannel(channelAssets);
+    };
   }, [userId]);
 
   const loadTransactions = async () => {
@@ -173,6 +220,10 @@ export function SponsorPanel({ userId }: SponsorPanelProps) {
 
     setAssetsData(dataMap);
   };
+
+  useEffect(() => {
+    loadAssetsDataRef.current = loadAssetsData;
+  });
 
   const getAssetInfo = (assetId: string) => assetsData.get(assetId);
 

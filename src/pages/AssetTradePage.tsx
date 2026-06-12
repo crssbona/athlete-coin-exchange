@@ -47,6 +47,7 @@ const AssetTradePage = () => {
 
     const [realPriceChange, setRealPriceChange] = useState<number>(0);
     const [realVolume24h, setRealVolume24h] = useState<number>(0);
+    const [refreshKey, setRefreshKey] = useState(0);
 
     // Estados do Livro de Ofertas (Order Book)
     const [sellOrders, setSellOrders] = useState<Order[]>([]);
@@ -142,9 +143,26 @@ const AssetTradePage = () => {
                     loadBuyOrders();
                 }).subscribe();
 
+            // INSCRIÇÃO REALTIME: Preço/estoque do ativo mudou (ex: cruzamento de ordens)
+            const channelAsset = supabase
+                .channel(`public:athlete_assets:${assetId}`)
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'athlete_assets', filter: `id=eq.${assetId}` }, () => {
+                    loadAssetAndAthlete();
+                    setRefreshKey((k) => k + 1);
+                }).subscribe();
+
+            // INSCRIÇÃO REALTIME: Novas negociações (gráfico e variação 24h)
+            const channelTx = supabase
+                .channel(`public:transactions:${assetId}`)
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions', filter: `asset_id=eq.${assetId}` }, () => {
+                    setRefreshKey((k) => k + 1);
+                }).subscribe();
+
             return () => {
                 supabase.removeChannel(channelSales);
                 supabase.removeChannel(channelPurchases);
+                supabase.removeChannel(channelAsset);
+                supabase.removeChannel(channelTx);
             };
         }
     }, [assetId]);
@@ -180,7 +198,7 @@ const AssetTradePage = () => {
             }
         };
         fetch24hChange();
-    }, [asset?.id, asset?.tokenPrice]);
+    }, [asset?.id, asset?.tokenPrice, refreshKey]);
 
     useEffect(() => {
         const loadChartData = async () => {
@@ -222,7 +240,7 @@ const AssetTradePage = () => {
             }
         };
         loadChartData();
-    }, [asset?.id, timeframe, asset?.tokenPrice]);
+    }, [asset?.id, timeframe, asset?.tokenPrice, refreshKey]);
 
     const handleBuy = async () => {
         if (isBlocked) {

@@ -43,6 +43,42 @@ export default function WalletPage() {
         }
     }, [user, loading, navigate]);
 
+    // INSCRIÇÕES REALTIME: atualiza saldo, reservas e histórico automaticamente
+    useEffect(() => {
+        if (!user) return;
+
+        const channelWallet = supabase
+            .channel(`public:wallets:${user.id}`)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'wallets', filter: `user_id=eq.${user.id}` }, () => {
+                loadWalletData();
+            }).subscribe();
+
+        const channelFiatTx = supabase
+            .channel(`public:fiat_transactions:${user.id}`)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'fiat_transactions', filter: `user_id=eq.${user.id}` }, () => {
+                loadWalletData();
+            }).subscribe();
+
+        const channelPendingAssetPurchases = supabase
+            .channel(`public:pending_asset_purchases:wallet:${user.id}`)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'pending_asset_purchases', filter: `user_id=eq.${user.id}` }, () => {
+                loadWalletData();
+            }).subscribe();
+
+        const channelPendingPurchases = supabase
+            .channel(`public:pending_purchases:wallet:${user.id}`)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'pending_purchases', filter: `user_id=eq.${user.id}` }, () => {
+                loadWalletData();
+            }).subscribe();
+
+        return () => {
+            supabase.removeChannel(channelWallet);
+            supabase.removeChannel(channelFiatTx);
+            supabase.removeChannel(channelPendingAssetPurchases);
+            supabase.removeChannel(channelPendingPurchases);
+        };
+    }, [user]);
+
     // NOVO: O "Espião" que verifica o pagamento automaticamente
     useEffect(() => {
         let interval: NodeJS.Timeout;
